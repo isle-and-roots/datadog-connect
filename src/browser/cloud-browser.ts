@@ -63,23 +63,37 @@ export async function fetchGcpProjectId(browser: BrowserController): Promise<str
     await browser.goto("https://console.cloud.google.com/");
 
     startSpinner("GCPログイン完了を待っています...");
-    await browser.waitForUrl(/console\.cloud\.google\.com/, 300000);
+    await browser.waitForUrl(/console\.cloud\.google\.com\/(?!.*(?:auth|signin|o\/oauth2))/, 300000);
     succeedSpinner("GCPログイン確認！");
 
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // IAM 設定ページに遷移（Project ID が表示される）
+    await browser.goto("https://console.cloud.google.com/iam-admin/settings");
+    await new Promise(resolve => setTimeout(resolve, 5000)); // GCPは描画が遅い
 
     const page = browser.getPage();
     if (!page) return null;
 
-    // プロジェクトセレクターからProject IDを取得
     const projectId = await page.evaluate(() => {
-      // URL からプロジェクトIDを取得
+      // パターン1: URLから
       const urlMatch = window.location.href.match(/[?&]project=([^&]+)/);
       if (urlMatch) return urlMatch[1];
 
-      // ページ内のプロジェクトID
+      // パターン2: ページ内のProject ID表示
+      const bodyText = document.body.innerText;
+      const idMatch = bodyText.match(/プロジェクト ID[:\s]+([a-z][a-z0-9-]{4,28}[a-z0-9])/i)
+        ?? bodyText.match(/Project ID[:\s]+([a-z][a-z0-9-]{4,28}[a-z0-9])/i);
+      if (idMatch) return idMatch[1];
+
+      // パターン3: data-project-id
       const els = document.querySelectorAll("[data-project-id]");
       if (els.length > 0) return els[0].getAttribute("data-project-id");
+
+      // パターン4: プロジェクトセレクターからテキスト抽出
+      const projSelector = document.querySelector('[aria-label*="project" i], [data-testid*="project"]');
+      if (projSelector?.textContent) {
+        const text = projSelector.textContent.trim();
+        if (/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(text)) return text;
+      }
 
       return null;
     });

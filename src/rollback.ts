@@ -79,11 +79,16 @@ async function deleteResource(
       );
 
     case "aws_integration":
-    case "gcp_integration":
     case "azure_integration":
     case "service_definition":
       throw new SkipError(
         `${type} (${name}) は自動削除できません。Datadog コンソールから手動で削除してください。`
+      );
+
+    case "gcp_integration":
+      throw new SkipError(
+        `${type} (${name}) はAPIで自動削除できません。以下で手動削除してください:\n` +
+        `  → Datadog > Integrations > Google Cloud Platform > 該当プロジェクトを削除`
       );
 
     default:

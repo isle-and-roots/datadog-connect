@@ -1,4 +1,4 @@
-import { input, checkbox, confirm } from "@inquirer/prompts";
+import { input, confirm } from "@inquirer/prompts";
 import { BaseModule } from "../base-module.js";
 import { registerModule } from "../registry.js";
 import { promptTags } from "../shared/tags.js";
@@ -6,23 +6,14 @@ import { printManual } from "../../utils/prompts.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
 import type { DatadogClient } from "../../client/datadog-client.js";
 import { writeExecutableFile, getSecureOutputDir } from "../../utils/secure-write.js";
-import { escapeShellArg } from "../../utils/validators.js";
+import { escapeShellArg, validateGcpProjectId } from "../../utils/validators.js";
 import { getBrowserController } from "../../browser/browser-controller.js";
 import { fetchGcpProjectId as fetchGcpProjectIdFromBrowser } from "../../browser/cloud-browser.js";
 
-const GCP_SERVICES = [
-  "compute", "cloud-sql", "gke", "cloud-functions", "pub-sub",
-  "cloud-storage", "bigquery", "cloud-run", "memorystore",
-  "cloud-composer", "dataflow", "filestore",
-];
 
 interface GcpConfig extends ModuleConfig {
   projectId: string;
   serviceAccountEmail: string;
-  services: string[];
-  enableLogs: boolean;
-  enableCost: boolean;
-  enableCspm: boolean;
   automute: boolean;
   tags: string[];
 }
@@ -54,55 +45,37 @@ class GcpModule extends BaseModule {
             // フォールバック: 手動入力
             projectId = await input({
               message: "GCP Project ID:",
-              validate: (v) => v.trim().length > 0 || "Project IDを入力してください",
+              validate: validateGcpProjectId,
             });
           }
         } else {
           projectId = await input({
             message: "GCP Project ID:",
-            validate: (v) => v.trim().length > 0 || "Project IDを入力してください",
+            validate: validateGcpProjectId,
           });
         }
       } else {
         projectId = await input({
           message: "GCP Project ID:",
-          validate: (v) => v.trim().length > 0 || "Project IDを入力してください",
+          validate: validateGcpProjectId,
         });
       }
     } else {
       projectId = await input({
         message: "GCP Project ID:",
-        validate: (v) => v.trim().length > 0 || "Project IDを入力してください",
+        validate: validateGcpProjectId,
       });
     }
 
     const serviceAccountEmail = await input({
-      message: "サービスアカウント Email (未作成の場合は空でOK):",
+      message: "サービスアカウント Email:",
       default: `datadog-integration@${projectId}.iam.gserviceaccount.com`,
-    });
-
-    const services = await checkbox({
-      message: "メトリクスを収集するGCPサービス:",
-      choices: GCP_SERVICES.map((s) => ({
-        value: s,
-        name: s,
-        checked: ["compute", "cloud-sql", "gke", "cloud-functions"].includes(s),
-      })),
-    });
-
-    const enableLogs = await confirm({
-      message: "Cloud Loggingエクスポートを有効にしますか？",
-      default: true,
-    });
-
-    const enableCost = await confirm({
-      message: "コスト管理を有効にしますか？",
-      default: false,
-    });
-
-    const enableCspm = await confirm({
-      message: "CSPM (クラウドセキュリティ態勢管理) を有効にしますか？",
-      default: false,
+      validate: (v) => {
+        if (!v.trim()) return "サービスアカウント Email は必須です";
+        if (!v.includes("@") || !v.includes(".iam.gserviceaccount.com"))
+          return "形式: name@project.iam.gserviceaccount.com";
+        return true;
+      },
     });
 
     const automute = await confirm({
@@ -112,7 +85,7 @@ class GcpModule extends BaseModule {
 
     const tags = await promptTags();
 
-    return { projectId, serviceAccountEmail, services, enableLogs, enableCost, enableCspm, automute, tags };
+    return { projectId, serviceAccountEmail, automute, tags };
   }
 
   async execute(config: GcpConfig, client: DatadogClient): Promise<ExecutionResult> {
@@ -128,6 +101,9 @@ class GcpModule extends BaseModule {
             attributes: {
               clientEmail: config.serviceAccountEmail,
               automute: config.automute,
+              additionalProperties: {
+                project_id: config.projectId,
+              },
             },
           },
         },
@@ -170,11 +146,30 @@ class GcpModule extends BaseModule {
     try {
       const resp = await client.v2.gcp.listGCPSTSAccounts();
       const accounts = resp.data ?? [];
-      const found = accounts.length > 0;
+
+      // 作成済みリソースがある場合は projectId で照合
+      const targetProjectId = this.createdResources[0]?.id;
+      let found: boolean;
+      let detail: string;
+
+      if (targetProjectId) {
+        found = accounts.some((a) => {
+          const account = a as unknown as { id?: string; attributes?: { additionalProperties?: { project_id?: string } } };
+          return account.id === targetProjectId ||
+            account.attributes?.additionalProperties?.project_id === targetProjectId;
+        });
+        detail = found
+          ? `Project ID ${targetProjectId} のアカウントが見つかりました`
+          : `Project ID ${targetProjectId} のアカウントが見つかりません`;
+      } else {
+        found = accounts.length > 0;
+        detail = found ? `${accounts.length}件のアカウント` : "アカウントが見つかりません";
+      }
+
       checks.push({
         name: "GCP STS統合が登録されている",
         passed: found,
-        detail: found ? `${accounts.length}件のアカウント` : "アカウントが見つかりません",
+        detail,
       });
     } catch (err) {
       checks.push({
@@ -224,16 +219,16 @@ for ROLE in "\${ROLES[@]}"; do
     --quiet
 done
 
-# 3. サービスアカウントキーを生成
-echo "3. サービスアカウントキーを生成中..."
-gcloud iam service-accounts keys create ./gcp-sa-key.json \\
-  --iam-account="\${SA_EMAIL}" \\
-  --project="\${PROJECT_ID}"
+# 3. Datadog に Workload Identity Federation を設定
+echo "3. Workload Identity Federation を設定中..."
+# DatadogのSTS統合はキーレス認証を使用します。
+# サービスアカウントキーの生成は不要です。
+# Datadog コンソールで GCP 統合設定を確認してください。
 
 echo ""
 echo "=== セットアップ完了 ==="
-echo "サービスアカウントキー: ./gcp-sa-key.json"
-echo "Datadogにアップロードしてください。"
+echo "Datadog コンソール (https://app.datadoghq.com/integrations/google-cloud-platform) で"
+echo "GCP 統合の設定を確認してください。"
 `;
 }
 

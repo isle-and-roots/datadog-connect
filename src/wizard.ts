@@ -55,6 +55,7 @@ export async function runSetup(opts: { profile: string }): Promise<void> {
     choices: [
       { value: "recommended", name: "おすすめセット — ダッシュボード + モニター + ログ（まず試したい方に）" },
       { value: "aws", name: "AWS環境向け — AWS統合 + モニター + ダッシュボード + APM" },
+      { value: "gcp", name: "☁️  GCP環境向け — GCP統合 + モニター + ダッシュボード + APM" },
       { value: "security", name: "セキュリティ重視 — CSPM + CWS + ASM + SIEM + SDS" },
       { value: "xserver", name: "Xserver向け — Xserver + モニター + ダッシュボード" },
       { value: "full", name: "フル — 全17モジュール" },
@@ -106,6 +107,7 @@ export async function runSetup(opts: { profile: string }): Promise<void> {
     const presetIds: Record<string, string[]> = {
       recommended: ["dashboards", "monitors", "logs"],
       aws: ["aws", "dashboards", "monitors", "apm", "logs"],
+      gcp: ["gcp", "dashboards", "monitors", "apm", "logs"],
       security: ["cspm", "cws", "asm", "siem", "sensitive-data"],
       xserver: ["xserver", "dashboards", "monitors"],
       full: allModules.map((m) => m.id),
