@@ -21,12 +21,10 @@ export async function authenticateXserver(
 
     await browser.goto("https://secure.xserver.ne.jp/xapanel/login/xvps/");
 
-    console.log();
-    console.log("  ┌─────────────────────────────────────────────┐");
-    console.log("  │  Xserver のログイン画面が開きました。        │");
-    console.log("  │  いつも通りログインしてください。            │");
-    console.log("  └─────────────────────────────────────────────┘");
-    console.log();
+    printInfo("┌─────────────────────────────────────────────┐");
+    printInfo("│  Xserver のログイン画面が開きました。        │");
+    printInfo("│  いつも通りログインしてください。            │");
+    printInfo("└─────────────────────────────────────────────┘");
 
     startSpinner("ログイン完了を待っています...");
     await browser.waitForUrl(/xapanel\/(index|server)/, 300000);
@@ -93,7 +91,7 @@ export async function fetchXserverVpsList(
         for (let i = 0; i < ips.length; i++) {
           // プライベートIPや localhost を除外
           const ip = ips[i];
-          if (ip.startsWith("127.") || ip.startsWith("0.") || ip.startsWith("10.") || ip.startsWith("192.168.")) continue;
+          if (ip.startsWith("127.") || ip.startsWith("0.") || ip.startsWith("10.") || ip.startsWith("192.168.") || /^172\.(1[6-9]|2\d|3[01])\./.test(ip)) continue;
           results.push({
             id: `vps-${i + 1}`,
             hostname: hosts[i] ?? "",
@@ -141,13 +139,16 @@ export async function configureXserverFirewall(
       return false;
     }
 
-    // ファイアウォール設定ページに移動
-    // Xserver VPS のファイアウォール設定URL（サーバーIDに依存）
-    await browser.goto(`https://secure.xserver.ne.jp/xapanel/index/xvps/`);
+    // VPS固有のファイアウォール設定ページに移動（vpsIdを使用）
+    if (vpsId) {
+      await browser.goto(`https://secure.xserver.ne.jp/xapanel/index/xvps/?server_id=${encodeURIComponent(vpsId)}`);
+    } else {
+      await browser.goto(`https://secure.xserver.ne.jp/xapanel/index/xvps/`);
+    }
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     // ファイアウォールリンクを探してクリック
-    const fwLink = await page.$('a[href*="firewall"], a:has-text("ファイアウォール"), a:has-text("Firewall")');
+    const fwLink = await page.$(`a[href*="firewall"][href*="${encodeURIComponent(vpsId)}"], a[href*="firewall"], a:has-text("ファイアウォール")`);
     if (fwLink) {
       await fwLink.click();
       await new Promise((resolve) => setTimeout(resolve, 2000));

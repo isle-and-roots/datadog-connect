@@ -79,11 +79,17 @@ class XserverModule extends BaseModule {
               vpsId = selectedVps.id;
               usedBrowser = true;
               printSuccess(`SSH接続先: ${host}`);
+              // ブラウザはexecute()のFW設定で再利用するため開いたまま
             } else {
               printInfo("VPS情報を自動取得できませんでした。手動で入力してください。");
               await browserCtrl.close();
             }
           } else {
+            await browserCtrl.close();
+          }
+
+          // ブラウザを使わない場合（VPS取得失敗 or ログイン失敗）は確実にclose
+          if (!usedBrowser && browserCtrl.getPage()) {
             await browserCtrl.close();
           }
         }
@@ -101,7 +107,10 @@ class XserverModule extends BaseModule {
     const portStr = await input({
       message: "SSHポート:",
       default: "22",
-      validate: (v) => /^\d+$/.test(v) || "ポート番号を入力してください",
+      validate: (v) => {
+        const n = parseInt(v, 10);
+        return (/^\d+$/.test(v) && n >= 1 && n <= 65535) || "ポート番号は1〜65535で入力してください";
+      },
     });
     port = parseInt(portStr, 10);
 
@@ -116,8 +125,8 @@ class XserverModule extends BaseModule {
     });
 
     const enableNginx = await confirm({
-      message: "Nginx監視を有効にしますか？",
-      default: true,
+      message: "Nginx監視を有効にしますか？ (Nginxがインストール済みの場合のみ)",
+      default: false,
     });
 
     const enableMysql = await confirm({
@@ -144,11 +153,11 @@ class XserverModule extends BaseModule {
       description: `SSH経由で${config.host}にDatadog Agentをインストールしてください。`,
       commands: [
         `# ローカルからSSH経由で実行`,
-        `ssh -p ${escapeShellArg(String(config.port))} ${escapeShellArg(config.user)}@${escapeShellArg(config.host)} 'bash -s' < ${scriptPath}`,
+        `ssh -p ${escapeShellArg(String(config.port))} ${escapeShellArg(config.user)}@${escapeShellArg(config.host)} 'bash -s' < ${escapeShellArg(scriptPath)}`,
         ``,
         `# または直接サーバーにログインして実行`,
         `ssh -p ${escapeShellArg(String(config.port))} ${escapeShellArg(config.user)}@${escapeShellArg(config.host)}`,
-        `bash ${scriptPath}`,
+        `bash ${escapeShellArg(scriptPath)}`,
       ],
       outputFile: scriptPath,
     });
@@ -157,9 +166,14 @@ class XserverModule extends BaseModule {
     let firewallConfigured = false;
     if (config.usedBrowser && config.vpsId) {
       const browserCtrl = getBrowserController();
-      // ブラウザがまだ開いている場合はそのまま使う
-      if (browserCtrl.getPage()) {
-        firewallConfigured = await configureXserverFirewall(browserCtrl, config.vpsId);
+      try {
+        if (browserCtrl.getPage()) {
+          firewallConfigured = await configureXserverFirewall(browserCtrl, config.vpsId);
+        }
+      } catch {
+        printInfo("ファイアウォール自動設定に失敗しました。手動設定に切り替えます。");
+      } finally {
+        // ブラウザを確実にクリーンアップ
         await browserCtrl.close();
       }
     }
