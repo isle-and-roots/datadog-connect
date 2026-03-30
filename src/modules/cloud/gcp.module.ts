@@ -7,6 +7,8 @@ import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../co
 import type { DatadogClient } from "../../client/datadog-client.js";
 import { writeExecutableFile, getSecureOutputDir } from "../../utils/secure-write.js";
 import { escapeShellArg } from "../../utils/validators.js";
+import { getBrowserController } from "../../browser/browser-controller.js";
+import { fetchGcpProjectId as fetchGcpProjectIdFromBrowser } from "../../browser/cloud-browser.js";
 
 const GCP_SERVICES = [
   "compute", "cloud-sql", "gke", "cloud-functions", "pub-sub",
@@ -33,10 +35,46 @@ class GcpModule extends BaseModule {
   readonly dependencies: string[] = [];
 
   async prompt(): Promise<GcpConfig> {
-    const projectId = await input({
-      message: "GCP Project ID:",
-      validate: (v) => v.trim().length > 0 || "Project IDを入力してください",
-    });
+    let projectId: string;
+    const browserCtrl = getBrowserController();
+    if (await browserCtrl.isAvailable()) {
+      const useBrowser = await confirm({
+        message: "ブラウザで GCP Project ID を自動取得しますか？",
+        default: true,
+      });
+      if (useBrowser) {
+        const ready = await browserCtrl.ensureBrowser();
+        if (ready) {
+          await browserCtrl.launch();
+          const fetched = await fetchGcpProjectIdFromBrowser(browserCtrl);
+          await browserCtrl.close();
+          if (fetched) {
+            projectId = fetched;
+          } else {
+            // フォールバック: 手動入力
+            projectId = await input({
+              message: "GCP Project ID:",
+              validate: (v) => v.trim().length > 0 || "Project IDを入力してください",
+            });
+          }
+        } else {
+          projectId = await input({
+            message: "GCP Project ID:",
+            validate: (v) => v.trim().length > 0 || "Project IDを入力してください",
+          });
+        }
+      } else {
+        projectId = await input({
+          message: "GCP Project ID:",
+          validate: (v) => v.trim().length > 0 || "Project IDを入力してください",
+        });
+      }
+    } else {
+      projectId = await input({
+        message: "GCP Project ID:",
+        validate: (v) => v.trim().length > 0 || "Project IDを入力してください",
+      });
+    }
 
     const serviceAccountEmail = await input({
       message: "サービスアカウント Email (未作成の場合は空でOK):",

@@ -4,6 +4,8 @@ import { DATADOG_SITES } from "../config/constants.js";
 import type { Credentials, DatadogSite } from "../config/types.js";
 import { startSpinner, succeedSpinner, failSpinner } from "../utils/spinner.js";
 import { printStep, printInfo } from "../utils/prompts.js";
+import { getBrowserController } from "../browser/browser-controller.js";
+import { fetchDatadogApiKey, createDatadogAppKey } from "../browser/datadog-browser.js";
 
 export async function promptCredentials(profile: string): Promise<Credentials> {
   printStep(1, "認証");
@@ -32,6 +34,60 @@ export async function promptCredentials(profile: string): Promise<Credentials> {
     return creds;
   }
 
+  // ブラウザ自動取得オプション
+  const browserCtrl = getBrowserController();
+  if (await browserCtrl.isAvailable()) {
+    const useBrowser = await select({
+      message: "認証情報の取得方法:",
+      choices: [
+        { value: "browser", name: "🌐 ブラウザで自動取得（おすすめ）— ログインするだけでOK" },
+        { value: "manual", name: "⌨️  手動入力 — キーを自分でコピペする" },
+      ],
+    });
+
+    if (useBrowser === "browser") {
+      const ready = await browserCtrl.ensureBrowser();
+      if (ready) {
+        await browserCtrl.launch();
+
+        // サイト選択（ブラウザモードでも必要）
+        const site = await select<DatadogSite>({
+          message: "Datadogサイト:",
+          choices: DATADOG_SITES.map((s) => ({ value: s.value, name: s.label })),
+        });
+
+        console.log();
+        console.log("  ┌─────────────────────────────────────────────┐");
+        console.log("  │  Datadog のログイン画面が開きました。        │");
+        console.log("  │  いつも通りログインしてください。            │");
+        console.log("  │  ログイン後、自動で次に進みます。            │");
+        console.log("  │                                              │");
+        console.log("  │  💡 SSO・二要素認証もそのまま使えます。      │");
+        console.log("  └─────────────────────────────────────────────┘");
+        console.log();
+
+        const apiKey = await fetchDatadogApiKey(browserCtrl, site);
+        const appKey = apiKey ? await createDatadogAppKey(browserCtrl, site) : null;
+
+        await browserCtrl.close();
+
+        if (apiKey && appKey) {
+          const creds: Credentials = { site, apiKey, appKey, profile };
+          startSpinner("認証を検証中...");
+          const valid = await validateCredentials(creds);
+          if (valid) {
+            succeedSpinner("認証OK (ブラウザ)");
+            return creds;
+          }
+          failSpinner("取得したキーが無効です。手動入力に切り替えます。");
+        } else {
+          printInfo("ブラウザでの取得に失敗しました。手動入力に切り替えます。");
+        }
+      }
+    }
+  }
+
+  // 以下、既存の手動入力フロー
   const site = await select<DatadogSite>({
     message: "Datadogサイト:",
     choices: DATADOG_SITES.map((s) => ({ value: s.value, name: s.label })),

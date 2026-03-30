@@ -7,6 +7,8 @@ import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../co
 import type { DatadogClient } from "../../client/datadog-client.js";
 import { writeExecutableFile, getSecureOutputDir } from "../../utils/secure-write.js";
 import { escapeShellArg } from "../../utils/validators.js";
+import { getBrowserController } from "../../browser/browser-controller.js";
+import { fetchAzureSubscriptionId as fetchAzureSubIdFromBrowser } from "../../browser/cloud-browser.js";
 
 interface AzureConfig extends ModuleConfig {
   tenantName: string;
@@ -41,11 +43,53 @@ class AzureModule extends BaseModule {
       mask: "*",
     });
 
-    const subsRaw = await input({
-      message: "監視するSubscription ID (カンマ区切り):",
-      validate: (v) => v.trim().length > 0 || "Subscription IDを入力してください",
+    let firstSubscriptionId: string;
+    const browserCtrl = getBrowserController();
+    if (await browserCtrl.isAvailable()) {
+      const useBrowser = await confirm({
+        message: "ブラウザで Azure Subscription ID を自動取得しますか？",
+        default: true,
+      });
+      if (useBrowser) {
+        const ready = await browserCtrl.ensureBrowser();
+        if (ready) {
+          await browserCtrl.launch();
+          const fetched = await fetchAzureSubIdFromBrowser(browserCtrl);
+          await browserCtrl.close();
+          if (fetched) {
+            firstSubscriptionId = fetched;
+          } else {
+            // フォールバック: 手動入力
+            firstSubscriptionId = await input({
+              message: "監視するSubscription ID (1つ目):",
+              validate: (v) => v.trim().length > 0 || "Subscription IDを入力してください",
+            });
+          }
+        } else {
+          firstSubscriptionId = await input({
+            message: "監視するSubscription ID (1つ目):",
+            validate: (v) => v.trim().length > 0 || "Subscription IDを入力してください",
+          });
+        }
+      } else {
+        firstSubscriptionId = await input({
+          message: "監視するSubscription ID (1つ目):",
+          validate: (v) => v.trim().length > 0 || "Subscription IDを入力してください",
+        });
+      }
+    } else {
+      firstSubscriptionId = await input({
+        message: "監視するSubscription ID (1つ目):",
+        validate: (v) => v.trim().length > 0 || "Subscription IDを入力してください",
+      });
+    }
+
+    const additionalSubsRaw = await input({
+      message: "追加のSubscription ID (カンマ区切り、不要な場合は空でOK):",
+      default: "",
     });
-    const subscriptionIds = subsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+    const additionalIds = additionalSubsRaw.split(",").map((s) => s.trim()).filter(Boolean);
+    const subscriptionIds = [firstSubscriptionId, ...additionalIds];
 
     const automute = await confirm({
       message: "VM停止時の自動ミュートを有効にしますか？",

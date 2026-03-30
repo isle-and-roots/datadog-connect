@@ -8,6 +8,8 @@ import { RESOURCE_PREFIX } from "../../config/constants.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
 import type { DatadogClient } from "../../client/datadog-client.js";
 import { writeSecureFile, getSecureOutputDir } from "../../utils/secure-write.js";
+import { getBrowserController } from "../../browser/browser-controller.js";
+import { fetchAwsAccountId as fetchAwsAccountIdFromBrowser } from "../../browser/cloud-browser.js";
 
 const AWS_SERVICES = [
   "ec2", "rds", "elb", "elbv2", "lambda", "s3", "cloudfront",
@@ -39,10 +41,34 @@ class AwsModule extends BaseModule {
   readonly dependencies: string[] = [];
 
   async prompt(): Promise<AwsConfig> {
-    const accountId = await input({
-      message: "AWS Account ID (12桁):",
-      validate: validateAwsAccountId,
-    });
+    let accountId: string;
+    const browserCtrl = getBrowserController();
+    if (await browserCtrl.isAvailable()) {
+      const useBrowser = await confirm({
+        message: "ブラウザで AWS Account ID を自動取得しますか？",
+        default: true,
+      });
+      if (useBrowser) {
+        const ready = await browserCtrl.ensureBrowser();
+        if (ready) {
+          await browserCtrl.launch();
+          const fetched = await fetchAwsAccountIdFromBrowser(browserCtrl);
+          await browserCtrl.close();
+          if (fetched) {
+            accountId = fetched;
+          } else {
+            // フォールバック: 手動入力
+            accountId = await input({ message: "AWS Account ID (12桁):", validate: validateAwsAccountId });
+          }
+        } else {
+          accountId = await input({ message: "AWS Account ID (12桁):", validate: validateAwsAccountId });
+        }
+      } else {
+        accountId = await input({ message: "AWS Account ID (12桁):", validate: validateAwsAccountId });
+      }
+    } else {
+      accountId = await input({ message: "AWS Account ID (12桁):", validate: validateAwsAccountId });
+    }
 
     const regions = await checkbox({
       message: "監視するリージョン:",

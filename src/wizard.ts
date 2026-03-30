@@ -1,5 +1,6 @@
-import { checkbox } from "@inquirer/prompts";
+import { checkbox, confirm } from "@inquirer/prompts";
 import { promptCredentials } from "./auth/key-manager.js";
+import { getBrowserController } from "./browser/browser-controller.js";
 import { createDatadogClient } from "./client/datadog-client.js";
 import { createSession, saveSession } from "./state/state-manager.js";
 import { createJournal, addResource } from "./state/operation-journal.js";
@@ -194,6 +195,32 @@ export async function runSetup(opts: { profile: string }): Promise<void> {
 
   if (allErrors.length > 0) {
     printInfo(`再実行: datadog-connect resume --session ${session.sessionId}`);
+  }
+
+  // 完了後ダッシュボード表示
+  if (allResources.some((r) => r.type === "dashboard")) {
+    const dashboardResource = allResources.find((r) => r.type === "dashboard");
+    if (dashboardResource) {
+      const browserCtrl = getBrowserController();
+      if (await browserCtrl.isAvailable()) {
+        const openDash = await confirm({
+          message: "Datadogダッシュボードをブラウザで開きますか？",
+          default: true,
+        });
+        if (openDash) {
+          const ready = await browserCtrl.ensureBrowser();
+          if (ready) {
+            await browserCtrl.launch();
+            const siteBase = session.site === "datadoghq.eu"
+              ? "https://app.datadoghq.eu"
+              : `https://app.${session.site}`;
+            await browserCtrl.goto(`${siteBase}/dashboard/${dashboardResource.id}`);
+            printSuccess("ダッシュボードを開きました！");
+            // ブラウザは閉じない（ユーザーが確認するため）
+          }
+        }
+      }
+    }
   }
 }
 
