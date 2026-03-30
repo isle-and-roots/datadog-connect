@@ -2,7 +2,7 @@ import { input, confirm } from "@inquirer/prompts";
 import { BaseModule } from "../base-module.js";
 import { registerModule } from "../registry.js";
 import { promptTags } from "../shared/tags.js";
-import { printManual } from "../../utils/prompts.js";
+import { printManual, printInfo } from "../../utils/prompts.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
 import type { DatadogClient } from "../../client/datadog-client.js";
 import { writeExecutableFile, getSecureOutputDir } from "../../utils/secure-write.js";
@@ -36,13 +36,20 @@ class GcpModule extends BaseModule {
       if (useBrowser) {
         const ready = await browserCtrl.ensureBrowser();
         if (ready) {
-          await browserCtrl.launch();
-          const fetched = await fetchGcpProjectIdFromBrowser(browserCtrl);
-          await browserCtrl.close();
-          if (fetched) {
+          let fetched: string | null = null;
+          try {
+            await browserCtrl.launch();
+            fetched = await fetchGcpProjectIdFromBrowser(browserCtrl);
+          } catch {
+            // ブラウザ操作失敗
+          } finally {
+            await browserCtrl.close();
+          }
+          // ブラウザ取得値もバリデーション
+          if (fetched && validateGcpProjectId(fetched) === true) {
             projectId = fetched;
           } else {
-            // フォールバック: 手動入力
+            if (fetched) printInfo("取得した値が不正なため、手動入力に切り替えます。");
             projectId = await input({
               message: "GCP Project ID:",
               validate: validateGcpProjectId,
@@ -154,9 +161,17 @@ class GcpModule extends BaseModule {
 
       if (targetProjectId) {
         found = accounts.some((a) => {
-          const account = a as unknown as { id?: string; attributes?: { additionalProperties?: { project_id?: string } } };
-          return account.id === targetProjectId ||
-            account.attributes?.additionalProperties?.project_id === targetProjectId;
+          const account = a as unknown as {
+            id?: string;
+            attributes?: {
+              clientEmail?: string;
+              additionalProperties?: { project_id?: string };
+            };
+          };
+          // 複数パターンで照合（API実装に依存しない堅牢な判定）
+          return account.id === targetProjectId
+            || account.attributes?.additionalProperties?.project_id === targetProjectId
+            || account.attributes?.clientEmail?.includes(`@${targetProjectId}.`);
         });
         detail = found
           ? `Project ID ${targetProjectId} のアカウントが見つかりました`
