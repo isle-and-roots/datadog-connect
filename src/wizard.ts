@@ -56,9 +56,9 @@ export async function runSetup(opts: { profile: string }): Promise<void> {
       { value: "recommended", name: "おすすめセット — ダッシュボード + モニター + ログ（まず試したい方に）" },
       { value: "aws", name: "AWS環境向け — AWS統合 + モニター + ダッシュボード + APM" },
       { value: "gcp", name: "☁️  GCP環境向け — GCP統合 + モニター + ダッシュボード + APM" },
-      { value: "security", name: "セキュリティ重視 — CSPM + CWS + ASM + SIEM + SDS" },
+      { value: "security", name: "セキュリティ重視 — CSPM + CWS + ASM + SIEM + SDS (+ APM/Logs依存)" },
       { value: "xserver", name: "Xserver向け — Xserver + モニター + ダッシュボード" },
-      { value: "full", name: "フル — 全17モジュール" },
+      { value: "full", name: "フル — 全16モジュール" },
       { value: "custom", name: "カスタム — 個別に選択" },
     ],
   });
@@ -108,7 +108,7 @@ export async function runSetup(opts: { profile: string }): Promise<void> {
       recommended: ["dashboards", "monitors", "logs"],
       aws: ["aws", "dashboards", "monitors", "apm", "logs"],
       gcp: ["gcp", "dashboards", "monitors", "apm", "logs"],
-      security: ["cspm", "cws", "asm", "siem", "sensitive-data"],
+      security: ["apm", "logs", "cspm", "cws", "asm", "siem", "sensitive-data"],
       xserver: ["xserver", "dashboards", "monitors"],
       full: allModules.map((m) => m.id),
     };

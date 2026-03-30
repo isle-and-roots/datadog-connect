@@ -1,6 +1,6 @@
 {
   "name": "datadog-connect",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Datadog ワンコマンドセットアップウィザード — 16モジュール対応",
   "type": "module",
   "license": "MIT",
@@ -42,7 +42,8 @@
     "rollback": "tsx src/index.ts rollback",
     "mcp": "tsx src/index.ts mcp",
     "build": "tsup",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm run build"
   },
   "dependencies": {
     "@datadog/datadog-api-client": "^1.53.0",

@@ -1,9 +1,8 @@
 import { select, confirm } from "@inquirer/prompts";
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { escapeShellArg } from "./utils/validators.js";
 import { printBanner, printStep, printSuccess, printError, printInfo } from "./utils/prompts.js";
 import { startSpinner, succeedSpinner, failSpinner } from "./utils/spinner.js";
 
@@ -107,15 +106,22 @@ export async function runMcpSetup(opts: McpSetupOptions): Promise<void> {
   startSpinner("@winor30/mcp-server-datadog をインストール中...");
 
   try {
-    const envFlags = [
-      `-e DD_API_KEY=${escapeShellArg(apiKey)}`,
-      `-e DD_APP_KEY=${escapeShellArg(appKey)}`,
-      `-e DD_SITE=${escapeShellArg(site)}`,
-    ].join(" ");
+    // spawn で引数配列として渡し、API キーが ps / shell history に露出しないようにする
+    const args = [
+      "mcp", "add",
+      "-s", scope,
+      "-e", `DD_API_KEY=${apiKey}`,
+      "-e", `DD_APP_KEY=${appKey}`,
+      "-e", `DD_SITE=${site}`,
+      "datadog",
+      "--",
+      "npx", "-y", "@winor30/mcp-server-datadog",
+    ];
 
-    const cmd = `claude mcp add -s ${escapeShellArg(scope)} ${envFlags} datadog -- npx -y @winor30/mcp-server-datadog`;
-
-    execSync(cmd, { stdio: "pipe" });
+    const result = spawnSync("claude", args, { stdio: "pipe" });
+    if (result.status !== 0) {
+      throw new Error(result.stderr?.toString() || "claude mcp add failed");
+    }
     succeedSpinner("Datadog MCP サーバーを登録しました");
   } catch (err) {
     failSpinner("MCP サーバーの登録に失敗しました");
@@ -123,7 +129,7 @@ export async function runMcpSetup(opts: McpSetupOptions): Promise<void> {
     printError(msg);
     printInfo("手動で設定する場合:");
     console.log();
-    console.log(`  claude mcp add -e DD_API_KEY=\${DD_API_KEY} -e DD_APP_KEY=\${DD_APP_KEY} -e DD_SITE=${site} datadog -- npx -y @winor30/mcp-server-datadog`);
+    console.log("  claude mcp add -e DD_API_KEY=${DD_API_KEY} -e DD_APP_KEY=${DD_APP_KEY} -e DD_SITE=${DD_SITE} datadog -- npx -y @winor30/mcp-server-datadog");
     console.log();
     return;
   }

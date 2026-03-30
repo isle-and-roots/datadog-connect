@@ -34,5 +34,9 @@ export function saveJournal(journal: Journal): void {
 export function loadJournal(sessionId: string): Journal | null {
   const path = getJournalPath(sessionId);
   if (!existsSync(path)) return null;
-  return JSON.parse(readFileSync(path, "utf-8")) as Journal;
+  try {
+    return JSON.parse(readFileSync(path, "utf-8")) as Journal;
+  } catch {
+    return null;
+  }
 }

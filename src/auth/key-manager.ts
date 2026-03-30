@@ -93,6 +93,7 @@ export async function promptCredentials(profile: string): Promise<Credentials> {
           }
           failSpinner("認証に失敗しました。手動入力に切り替えます。");
         } else {
+          await browserCtrl.close();
           printInfo("ブラウザでの取得に失敗しました。手動入力に切り替えます。");
         }
       }
