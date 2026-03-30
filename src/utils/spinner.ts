@@ -17,6 +17,10 @@ export function failSpinner(text: string): void {
   current = null;
 }
 
+export function updateSpinner(text: string): void {
+  if (current) current.text = text;
+}
+
 export function stopSpinner(): void {
   current?.stop();
   current = null;

@@ -136,7 +136,7 @@ npx tsx src/index.ts mcp
 
 - **認証エラー**: API Key と Application Key が正しいか確認してください
 - **機能がスキップされた**: お使いの Datadog プランで利用できない機能は自動でスキップされます
-- **途中で止まった**: 同じコマンドで再度実行すれば、途中から再開できます
+- **途中で止まった**: `npm run setup` で新しいセッションを開始するか、`npm run resume` で前回の失敗モジュールだけ再実行できます
 
 ## Security Design
 

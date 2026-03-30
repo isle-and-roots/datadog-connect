@@ -4,4 +4,5 @@ dist/
 .env
 .claude/
 .letta/
-output/
+/output/
+Plans.md

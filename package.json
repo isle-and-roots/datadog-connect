@@ -8,6 +8,10 @@
   },
   "scripts": {
     "dev": "tsx src/index.ts",
+    "setup": "tsx src/index.ts setup",
+    "resume": "tsx src/index.ts resume",
+    "rollback": "tsx src/index.ts rollback",
+    "mcp": "tsx src/index.ts mcp",
     "build": "tsup",
     "typecheck": "tsc --noEmit"
   },

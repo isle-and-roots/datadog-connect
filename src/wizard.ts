@@ -1,4 +1,4 @@
-import { checkbox, confirm } from "@inquirer/prompts";
+import { checkbox, confirm, select } from "@inquirer/prompts";
 import { promptCredentials } from "./auth/key-manager.js";
 import { getBrowserController } from "./browser/browser-controller.js";
 import { createDatadogClient } from "./client/datadog-client.js";
@@ -7,6 +7,7 @@ import { createJournal, addResource } from "./state/operation-journal.js";
 import { getModules, resolveOrder } from "./modules/registry.js";
 import { printBanner, printStep, printSuccess, printError, printInfo } from "./utils/prompts.js";
 import { startSpinner, succeedSpinner, failSpinner } from "./utils/spinner.js";
+import chalk from "chalk";
 import { printSummary, exportSummary } from "./output/summary.js";
 import { getSecureOutputDir } from "./utils/secure-write.js";
 import type { BaseModule } from "./modules/base-module.js";
@@ -44,17 +45,78 @@ export async function runSetup(opts: { profile: string }): Promise<void> {
   printInfo(`セッション: ${session.sessionId}`);
   console.log();
 
-  // Step 2: Module selection
-  printStep(2, "機能選択");
+  // Step 2: セットアップタイプ選択
+  printStep(2, "セットアップタイプ");
+
   const allModules = getModules();
-  const selectedModules = await checkbox<BaseModule>({
-    message: "どの機能を有効にしますか？",
-    choices: allModules.map((m) => ({
-      value: m,
-      name: `${m.name} — ${m.description}`,
-      checked: true,
-    })),
+
+  const presetChoice = await select({
+    message: "セットアップタイプを選んでください:",
+    choices: [
+      { value: "recommended", name: "おすすめセット — ダッシュボード + モニター + ログ（まず試したい方に）" },
+      { value: "aws", name: "AWS環境向け — AWS統合 + モニター + ダッシュボード + APM" },
+      { value: "security", name: "セキュリティ重視 — CSPM + CWS + ASM + SIEM + SDS" },
+      { value: "xserver", name: "Xserver向け — Xserver + モニター + ダッシュボード" },
+      { value: "full", name: "フル — 全17モジュール" },
+      { value: "custom", name: "カスタム — 個別に選択" },
+    ],
   });
+
+  let selectedModules: BaseModule[];
+
+  if (presetChoice === "custom") {
+    // カテゴリ別の段階的選択
+    const cloudModules = allModules.filter((m) => m.category === "cloud");
+    const featureModules = allModules.filter((m) => m.category === "feature");
+    const securityModules = allModules.filter((m) => m.category === "security");
+
+    printStep(2, "クラウド環境");
+    const selectedCloud = await checkbox<BaseModule>({
+      message: "使用しているクラウド環境:",
+      choices: cloudModules.map((m) => ({
+        value: m,
+        name: `${m.name} — ${m.description}`,
+        checked: false,
+      })),
+    });
+
+    printStep(2, "監視機能");
+    const selectedFeature = await checkbox<BaseModule>({
+      message: "有効にする監視機能:",
+      choices: featureModules.map((m) => ({
+        value: m,
+        name: `${m.name} — ${m.description}`,
+        checked: ["monitors", "dashboards"].includes(m.id),
+      })),
+    });
+
+    printStep(2, "セキュリティ");
+    const selectedSecurity = await checkbox<BaseModule>({
+      message: "有効にするセキュリティ機能:",
+      choices: securityModules.map((m) => ({
+        value: m,
+        name: `${m.name} — ${m.description}`,
+        checked: false,
+      })),
+    });
+
+    selectedModules = [...selectedCloud, ...selectedFeature, ...selectedSecurity];
+  } else {
+    // プリセットに基づくモジュール選択
+    const presetIds: Record<string, string[]> = {
+      recommended: ["dashboards", "monitors", "logs"],
+      aws: ["aws", "dashboards", "monitors", "apm", "logs"],
+      security: ["cspm", "cws", "asm", "siem", "sensitive-data"],
+      xserver: ["xserver", "dashboards", "monitors"],
+      full: allModules.map((m) => m.id),
+    };
+
+    const ids = new Set(presetIds[presetChoice] ?? []);
+    selectedModules = allModules.filter((m) => ids.has(m.id));
+
+    // プリセットの内容を表示
+    printInfo(`選択されたモジュール: ${selectedModules.map((m) => m.name).join(", ")}`);
+  }
 
   if (selectedModules.length === 0) {
     printError("機能が選択されていません。終了します。");
@@ -69,9 +131,12 @@ export async function runSetup(opts: { profile: string }): Promise<void> {
   const allManualSteps: ManualStep[] = [];
   const allErrors: string[] = [];
   let stepNum = 3;
+  const totalModules = ordered.length;
+  let moduleIndex = 0;
 
   for (const mod of ordered) {
-    printStep(stepNum++, mod.name);
+    moduleIndex++;
+    printStep(stepNum++, `${mod.name} [${moduleIndex}/${totalModules}]`);
 
     // Initialize module state
     session.modules[mod.id] = {
@@ -121,11 +186,11 @@ export async function runSetup(opts: { profile: string }): Promise<void> {
       const result = await mod.execute(config, client);
 
       if (result.success) {
-        succeedSpinner(`${mod.name} 完了`);
+        succeedSpinner(`${mod.name} 完了 (作成: ${result.resources.length}件)`);
         mod.state = "completed";
         session.modules[mod.id].state = "completed";
       } else {
-        failSpinner(`${mod.name} 一部失敗`);
+        failSpinner(`${mod.name} 一部失敗 (成功: ${result.resources.length}件 / 失敗: ${result.errors.length}件)`);
         mod.state = "failed";
         session.modules[mod.id].state = "failed";
       }
@@ -193,9 +258,24 @@ export async function runSetup(opts: { profile: string }): Promise<void> {
   const reportPath = exportSummary(summaryData, outputDir);
   printSuccess(`レポート出力: ${reportPath}`);
 
-  if (allErrors.length > 0) {
-    printInfo(`再実行: datadog-connect resume --session ${session.sessionId}`);
+  // 次のステップ案内
+  console.log();
+  console.log(chalk.bold.cyan("  📋 次のステップ"));
+  console.log(chalk.dim("  ─").repeat(25));
+
+  if (allManualSteps.length > 0) {
+    printInfo(`手動手順が ${allManualSteps.length} 件あります。出力ファイルを確認してください。`);
   }
+
+  if (allResources.some((r) => r.type === "monitor")) {
+    printInfo("モニターは約10分後に初回チェックを実行します。");
+  }
+
+  if (allErrors.length > 0) {
+    printInfo(`失敗した ${allErrors.length} 件は datadog-connect resume で再実行できます。`);
+  }
+
+  printInfo("設定内容を確認するには Datadog (https://app.datadoghq.com) にログインしてください。");
 
   // 完了後ダッシュボード表示
   if (allResources.some((r) => r.type === "dashboard")) {

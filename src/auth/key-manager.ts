@@ -3,7 +3,7 @@ import { client as ddClient, v1 } from "@datadog/datadog-api-client";
 import { DATADOG_SITES } from "../config/constants.js";
 import type { Credentials, DatadogSite } from "../config/types.js";
 import { startSpinner, succeedSpinner, failSpinner } from "../utils/spinner.js";
-import { printStep, printInfo } from "../utils/prompts.js";
+import { printStep, printInfo, printError } from "../utils/prompts.js";
 import { getBrowserController } from "../browser/browser-controller.js";
 import { fetchDatadogApiKey, createDatadogAppKey } from "../browser/datadog-browser.js";
 
@@ -98,34 +98,40 @@ export async function promptCredentials(profile: string): Promise<Credentials> {
     }
   }
 
-  // 以下、既存の手動入力フロー
-  const site = await select<DatadogSite>({
-    message: "Datadogサイト:",
-    choices: DATADOG_SITES.map((s) => ({ value: s.value, name: s.label })),
-  });
+  // 以下、手動入力フロー（最大3回リトライ）
+  printInfo("ヒント: ログインURL (app.datadoghq.com or app.datadoghq.eu 等) でサイトを判別できます。");
 
-  const apiKey = await password({
-    message: "API Key:",
-    mask: "*",
-  });
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const site = await select<DatadogSite>({
+      message: "Datadogサイト:",
+      choices: DATADOG_SITES.map((s) => ({ value: s.value, name: s.label })),
+    });
 
-  const appKey = await password({
-    message: "Application Key:",
-    mask: "*",
-  });
+    const apiKey = await password({ message: "API Key:", mask: "*" });
+    const appKey = await password({ message: "Application Key:", mask: "*" });
 
-  const creds: Credentials = { site, apiKey, appKey, profile };
+    const creds: Credentials = { site, apiKey, appKey, profile };
 
-  // Validate
-  startSpinner("認証を検証中...");
-  const valid = await validateCredentials(creds);
-  if (!valid) {
-    failSpinner("認証失敗 — API Key または Application Key が無効です");
-    throw new Error("Invalid credentials");
+    startSpinner("認証を検証中...");
+    const valid = await validateCredentials(creds);
+    if (valid) {
+      succeedSpinner("認証OK");
+      return creds;
+    }
+
+    failSpinner(`認証失敗 (${attempt}/3)`);
+    if (attempt < 3) {
+      printInfo("API Key または Application Key を確認して、もう一度入力してください。");
+      printInfo("→ Datadog > Organization Settings > API Keys で確認できます。");
+    }
   }
-  succeedSpinner("認証OK");
 
-  return creds;
+  // 3回失敗
+  printError("認証に3回失敗しました。以下を確認してください:");
+  printInfo("  1. API Key が正しいか (Organization Settings > API Keys)");
+  printInfo("  2. Application Key が正しいか (Organization Settings > Application Keys)");
+  printInfo("  3. 選択したDatadogサイトが正しいか");
+  throw new Error("認証に3回失敗しました");
 }
 
 async function validateCredentials(creds: Credentials): Promise<boolean> {

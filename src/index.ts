@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { APP_NAME, APP_VERSION } from "./config/constants.js";
 import { runSetup } from "./wizard.js";
+import { runResume } from "./resume.js";
 import { runRollback } from "./rollback.js";
 import { runMcpSetup } from "./mcp-setup.js";
 
@@ -22,7 +23,7 @@ program
   .description("中断したセッションを再開")
   .option("-s, --session <id>", "セッションID")
   .action(async (opts) => {
-    console.log(`Resume: session=${opts.session ?? "latest"} (未実装)`);
+    await runResume({ sessionId: opts.session });
   });
 
 program
