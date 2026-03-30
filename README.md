@@ -7,7 +7,7 @@ Datadog の全機能セットアップを1コマンドで完結させる CLI ウ
 
 ## Features
 
-### 17 モジュール
+### 16 モジュール
 
 **Cloud (6)**
 | モジュール | 機能 |
@@ -92,7 +92,7 @@ npm run setup
     ☁️  GCP環境向け
     🔒 セキュリティ重視
     🖥️  Xserver向け
-    🚀 フル — 全17モジュール
+    🚀 フル — 全16モジュール
     ⚙️  カスタム — 個別に選択
 
   Step 3: ダッシュボード [1/3]
@@ -159,6 +159,36 @@ npm run mcp
 - **途中で止まった**: `npm run resume` で前回の失敗モジュールだけ再実行できます
 - **設定を元に戻したい**: `npm run rollback` で作成リソースを削除できます
 - **ブラウザ自動取得がうまくいかない**: 手動入力に自動で切り替わります
+
+## Claude Code プラグインとして使う
+
+Datadog Connect は Claude Code のネイティブプラグインとしても動作します。
+
+### セットアップ
+
+```bash
+# プラグインとして登録
+claude plugins add /path/to/datadog-connect
+```
+
+### 使い方
+
+Claude Code で以下のように話しかけるだけ:
+
+```
+「Datadogをセットアップして」
+「GCP環境にDatadog監視を設定して」
+「Datadogのセキュリティ機能を有効にして」
+```
+
+または直接コマンド:
+
+```
+/datadog-connect setup
+/datadog-connect resume
+/datadog-connect rollback
+/datadog-connect mcp
+```
 
 ## Security Design
 

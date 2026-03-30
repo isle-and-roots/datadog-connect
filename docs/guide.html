@@ -841,7 +841,7 @@
 
     <div class="hero-stats">
       <div class="stat">
-        <div class="stat-num">17</div>
+        <div class="stat-num">16</div>
         <div class="stat-label">モジュール</div>
       </div>
       <div class="stat">
@@ -961,7 +961,7 @@
             <code><span class="cmd">npm run setup</span></code>
           </div>
         </div>
-        <p class="step-desc" style="margin-top:0.5rem">起動すると、最初に認証方法を選択します。<strong>ブラウザで自動取得</strong>がおすすめです。</p>
+        <p class="step-desc" style="margin-top:0.5rem">起動すると、最初に認証方法を選択します。<strong>ブラウザで自動取得</strong>がおすすめです。認証に失敗しても3回まで再入力可能。API Key の確認方法も案内されます。</p>
         <div class="terminal">
           <div class="terminal-header">
             <span class="dot red"></span>
@@ -999,6 +999,11 @@
             <div class="preset-icon">☁️</div>
             <div class="preset-name">AWS環境向け</div>
             <div class="preset-desc">AWS統合 + EC2/RDS/Lambda の監視を一括設定。</div>
+          </div>
+          <div class="preset-card">
+            <div class="preset-icon">☁️</div>
+            <div class="preset-name">GCP環境向け</div>
+            <div class="preset-desc">GCP統合 + モニター + ダッシュボード + APM + ログ。GCPを使っている環境に。</div>
           </div>
           <div class="preset-card">
             <div class="preset-icon">🔒</div>
@@ -1149,6 +1154,34 @@
   </div>
 </section>
 
+<!-- ===== Claude Code プラグイン ===== -->
+<section id="plugin" class="section">
+  <div class="container">
+    <div class="section-label">Claude Code プラグイン</div>
+    <h2 class="section-title">Claude Code プラグイン</h2>
+    <p style="text-align: center; color: var(--text-secondary); margin-bottom: 2rem;">
+      Claude Code のネイティブプラグインとしても動作します。
+    </p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">💬</div>
+        <h3>話しかけるだけ</h3>
+        <p>「Datadogをセットアップして」と Claude Code に話しかけるだけで、スキルが自動起動します。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>コマンド直接呼び出し</h3>
+        <p><code>/datadog-connect setup</code> で直接実行も可能。resume, rollback, mcp も対応。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔧</div>
+        <h3>CLIスタンドアロン</h3>
+        <p><code>npm run setup</code> で Claude Code なしでも動作。顧客デモに最適。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ===== FAQ ===== -->
 <section id="faq">
   <div class="container">
@@ -1181,7 +1214,7 @@
         </button>
         <div class="faq-a">
           <div class="faq-a-inner">
-            ブラウザが自動起動しない場合や操作がうまくいかない場合は、<strong>手動入力</strong>に切り替えてください。<br><br>
+            ブラウザが自動起動しない場合や操作がうまくいかない場合は、<strong>手動入力</strong>に切り替えてください。取得した値は自動でバリデーション。不正な値は手動入力に切り替わります。<br><br>
             手動入力では以下の情報が必要です：<br>
             &nbsp;&nbsp;・Datadog <strong>API Key</strong>（Organization Settings → API Keys）<br>
             &nbsp;&nbsp;・Datadog <strong>Application Key</strong>（Organization Settings → Application Keys）<br><br>
