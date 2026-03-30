@@ -1,10 +1,29 @@
 {
   "name": "datadog-connect",
   "version": "0.1.0",
-  "description": "Datadog ワンコマンドセットアップウィザード",
+  "description": "Datadog ワンコマンドセットアップウィザード — 16モジュール対応",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/isle-and-roots/datadog-connect.git"
+  },
+  "keywords": [
+    "datadog",
+    "monitoring",
+    "setup",
+    "cli",
+    "wizard",
+    "observability",
+    "security"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "bin": {
-    "datadog-connect": "./dist/index.js"
+    "datadog-connect": "dist/index.js"
   },
   "scripts": {
     "dev": "tsx src/index.ts",
