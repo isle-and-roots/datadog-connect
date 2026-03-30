@@ -2,7 +2,7 @@ import { checkbox, input, select, confirm } from "@inquirer/prompts";
 import { BaseModule } from "../base-module.js";
 import { registerModule } from "../registry.js";
 import { RESOURCE_PREFIX } from "../../config/constants.js";
-import { printManual, printSuccess } from "../../utils/prompts.js";
+import { printManual, printSuccess, printInfo } from "../../utils/prompts.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
 import type { DatadogClient } from "../../client/datadog-client.js";
 import { writeSecureFile, getSecureOutputDir } from "../../utils/secure-write.js";
@@ -38,6 +38,11 @@ class ApmModule extends BaseModule {
       message: "使用プログラミング言語:",
       choices: LANGUAGES.map((l) => ({ ...l, checked: false })),
     });
+
+    if (languages.length === 0) {
+      printInfo("言語が選択されていないため、APMサービス登録をスキップします。");
+      return { languages: [], services: [], environment: "production", samplingRate: 100, enableProfiling: false, enableDataStreams: false };
+    }
 
     const services: { name: string; language: string }[] = [];
     const addMore = true;

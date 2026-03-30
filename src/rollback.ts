@@ -50,6 +50,7 @@ async function deleteResource(
       break;
 
     case "asm_waf_rule":
+    case "asm_waf_custom_rule":
       await client.security.asm.deleteApplicationSecurityWafCustomRule({
         customRuleId: id,
       });
@@ -62,10 +63,20 @@ async function deleteResource(
       break;
 
     case "security_monitoring_rule":
+    case "siem_rule":
       await client.security.monitoring.deleteSecurityMonitoringRule({
         ruleId: id,
       });
       break;
+
+    case "cspm_aws_scan_options":
+    case "cspm_gcp_scan_options":
+    case "cspm_azure_scan_options":
+    case "sensitive_data_group":
+    case "sensitive_data_rule":
+      throw new SkipError(
+        `${type} (${name}) は自動削除が複雑なため手動削除してください。Datadog コンソール > Security で確認できます。`
+      );
 
     case "aws_integration":
     case "gcp_integration":

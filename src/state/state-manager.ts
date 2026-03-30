@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, mkdirSync, existsSync, readdirSync, statSync } from "node:fs";
 import { writeSecureFile } from "../utils/secure-write.js";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -33,7 +33,11 @@ export function saveSession(session: SessionState): void {
 export function loadSession(sessionId: string): SessionState | null {
   const path = join(getStateDir(), `session-${sessionId}.json`);
   if (!existsSync(path)) return null;
-  return JSON.parse(readFileSync(path, "utf-8")) as SessionState;
+  try {
+    return JSON.parse(readFileSync(path, "utf-8")) as SessionState;
+  } catch {
+    return null;
+  }
 }
 
 export function loadLatestSession(): SessionState | null {
@@ -41,8 +45,15 @@ export function loadLatestSession(): SessionState | null {
   if (!existsSync(dir)) return null;
   const files = readdirSync(dir)
     .filter((f) => f.startsWith("session-") && f.endsWith(".json"))
-    .sort()
-    .reverse();
+    .sort((a, b) => {
+      const aTime = statSync(join(dir, a)).mtimeMs;
+      const bTime = statSync(join(dir, b)).mtimeMs;
+      return bTime - aTime;
+    });
   if (files.length === 0) return null;
-  return JSON.parse(readFileSync(join(dir, files[0]), "utf-8")) as SessionState;
+  try {
+    return JSON.parse(readFileSync(join(dir, files[0]), "utf-8")) as SessionState;
+  } catch {
+    return null;
+  }
 }

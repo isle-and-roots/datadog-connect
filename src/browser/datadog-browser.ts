@@ -2,6 +2,17 @@ import { BrowserController } from "./browser-controller.js";
 import { printInfo, printSuccess } from "../utils/prompts.js";
 import { startSpinner, succeedSpinner, failSpinner } from "../utils/spinner.js";
 
+const ALLOWED_SITES = new Set([
+  "datadoghq.com", "datadoghq.eu", "us3.datadoghq.com",
+  "us5.datadoghq.com", "ap1.datadoghq.com", "ddog-gov.com",
+]);
+
+function getDatadogBaseUrl(site: string): string {
+  if (!ALLOWED_SITES.has(site)) throw new Error(`Invalid Datadog site: ${site}`);
+  if (site === "datadoghq.eu") return "https://app.datadoghq.eu";
+  return `https://app.${site}`;
+}
+
 /**
  * Datadog API Key をブラウザで取得
  * 1. Datadog API Keys ページに移動
@@ -13,7 +24,7 @@ export async function fetchDatadogApiKey(
   site: string
 ): Promise<string | null> {
   try {
-    const baseUrl = site === "datadoghq.eu" ? "https://app.datadoghq.eu" : `https://app.${site}`;
+    const baseUrl = getDatadogBaseUrl(site);
     // デフォルトは https://app.datadoghq.com
 
     printInfo("Datadog のログイン画面を開きます。ログインしてください。");
@@ -83,7 +94,7 @@ export async function createDatadogAppKey(
   site: string
 ): Promise<string | null> {
   try {
-    const baseUrl = site === "datadoghq.eu" ? "https://app.datadoghq.eu" : `https://app.${site}`;
+    const baseUrl = getDatadogBaseUrl(site);
 
     await browser.goto(`${baseUrl}/organization-settings/application-keys`);
     await new Promise(resolve => setTimeout(resolve, 3000));

@@ -80,6 +80,17 @@ export async function promptCredentials(profile: string): Promise<Credentials> {
             return creds;
           }
           failSpinner("取得したキーが無効です。手動入力に切り替えます。");
+        } else if (apiKey) {
+          printInfo("Application Key を手動で入力してください。");
+          const manualAppKey = await password({ message: "Application Key:", mask: "*" });
+          const creds: Credentials = { site, apiKey, appKey: manualAppKey, profile };
+          startSpinner("認証を検証中...");
+          const valid = await validateCredentials(creds);
+          if (valid) {
+            succeedSpinner("認証OK (API Key: ブラウザ + App Key: 手動)");
+            return creds;
+          }
+          failSpinner("認証に失敗しました。手動入力に切り替えます。");
         } else {
           printInfo("ブラウザでの取得に失敗しました。手動入力に切り替えます。");
         }

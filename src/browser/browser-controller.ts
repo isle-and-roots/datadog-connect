@@ -60,7 +60,7 @@ export class BrowserController {
     const pw = await import("playwright");
     this.browser = await pw.chromium.launch({
       headless: false,
-      args: ["--no-sandbox"],
+      args: process.env.PLAYWRIGHT_NO_SANDBOX === "1" ? ["--no-sandbox"] : [],
     });
     const context = await this.browser.newContext();
     this.page = await context.newPage();
