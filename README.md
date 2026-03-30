@@ -3,11 +3,14 @@
 Datadog の全機能セットアップを1コマンドで完結させる CLI ウィザード。
 対話形式でヒアリング → Datadog API で自動設定 → 手順書出力まで、ワンストップで行います。
 
-```bash
-npx datadog-connect setup
-```
+## 必要なもの
 
-> **Claude Code ユーザーの方へ**: プラグインとして使うとさらに便利です → [Claude Code プラグイン](#claude-code-プラグインとして使う推奨)
+| 項目 | 必須 | 説明 |
+|------|:----:|------|
+| **Node.js v20+** | ✅ | [ダウンロード](https://nodejs.org/) — ターミナルで `node -v` を実行して `v20.x.x` 以上ならOK |
+| **Datadog アカウント** | ✅ | [Datadog](https://www.datadoghq.com/) で無料アカウントを作成 |
+| **API Key & Application Key** | ✅ | Datadog > Organization Settings > API Keys / Application Keys で取得（またはブラウザ自動取得） |
+| **Claude Code** | 推奨 | [Claude Code](https://claude.ai/code) — プラグインとして使うとさらに便利 |
 
 ## Claude Code プラグインとして使う（推奨）
 
@@ -83,15 +86,6 @@ Playwright を使って、ログインするだけで各サービスの情報を
 - **Xserver**: VPS情報 + ファイアウォール自動設定
 
 ## CLI として使う（Claude Code なしの場合）
-
-### 事前に必要なもの
-
-1. **Node.js** (v20以上) — [ダウンロードはこちら](https://nodejs.org/)
-2. **Datadog アカウント** — [Datadog](https://www.datadoghq.com/) でアカウントを作成
-3. **Datadog API Key と Application Key**:
-   - Datadog > **Organization Settings** > **API Keys** で API Key をコピー
-   - 同画面の **Application Keys** で Application Key を作成してコピー
-   - **または**: ブラウザ自動取得を使えば、ログインするだけでOK
 
 ### npx で実行（インストール不要）
 
