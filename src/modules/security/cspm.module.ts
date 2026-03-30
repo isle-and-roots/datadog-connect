@@ -64,13 +64,17 @@ class CspmModule extends BaseModule {
 
   async prompt(): Promise<CspmConfig> {
     const providers = await checkbox<CloudProvider>({
-      message: "Agentlessスキャンを有効化するクラウドプロバイダー:",
+      message: "Agentlessスキャンを有効化するクラウドプロバイダー (スペースで選択):",
       choices: CLOUD_PROVIDERS.map((p) => ({
         value: p.value,
         name: p.name,
-        checked: true,
+        checked: false,
       })),
     });
+
+    if (providers.length === 0) {
+      return { providers: [], accounts: [], scanTargets: [], confirmEnable: false };
+    }
 
     // 各プロバイダーのアカウントIDを収集
     const accounts: ProviderAccount[] = [];
