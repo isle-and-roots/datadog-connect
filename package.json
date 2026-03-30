@@ -1,6 +1,6 @@
 {
   "name": "datadog-connect",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Datadog ワンコマンドセットアップウィザード — 16モジュール対応",
   "type": "module",
   "license": "MIT",
@@ -27,6 +27,8 @@
   ],
   "files": [
     "dist",
+    ".claude-plugin",
+    "skills",
     "README.md",
     "LICENSE"
   ],

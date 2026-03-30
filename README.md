@@ -21,7 +21,7 @@ Datadog Connect は Claude Code のネイティブプラグインとして動作
 
 ```bash
 npm install -g datadog-connect
-claude plugins add $(npm root -g)/datadog-connect
+claude plugins install $(npm root -g)/datadog-connect
 ```
 
 ### 使い方
