@@ -35,39 +35,85 @@ Datadog の全機能セットアップを1コマンドで完結させる CLI ウ
 | SIEM | 検出ルール 4パック + シグナル通知 |
 | Sensitive Data Scanner | 機密データスキャン (PII/CC/APIキー) |
 
-## Setup
+## 使い方（はじめての方向け）
+
+### 事前に必要なもの
+
+1. **Node.js** (v20以上) — [ダウンロードはこちら](https://nodejs.org/)
+   - インストール後、ターミナルで `node -v` と入力して `v20.x.x` 以上が表示されればOK
+2. **Datadog アカウント** — [Datadog](https://www.datadoghq.com/) でアカウントを作成
+3. **Datadog API Key と Application Key** — 以下の手順で取得:
+   - Datadog にログイン
+   - 左メニュー下の **Organization Settings** > **API Keys** で API Key をコピー
+   - 同じ画面の **Application Keys** で Application Key を作成してコピー
+
+### Step 1: ツールをダウンロード
+
+ターミナル（Mac: ターミナル.app / Windows: PowerShell）を開いて、以下を実行:
 
 ```bash
-# 依存インストール
+git clone https://github.com/isle-and-roots/datadog-connect.git
+cd datadog-connect
 npm install
-
-# 開発実行
-npx tsx src/index.ts setup
-
-# ビルド
-npm run build
 ```
 
-## Environment Variables
-
-| 変数 | 説明 | 必須 |
-|------|------|------|
-| `DD_API_KEY` | Datadog API Key | 設定時はインタラクティブ入力をスキップ |
-| `DD_APP_KEY` | Datadog Application Key | 同上 |
-| `DD_SITE` | Datadog サイト (例: datadoghq.com) | デフォルト: datadoghq.com |
-
-## CLI Commands
+### Step 2: セットアップウィザードを起動
 
 ```bash
-# セットアップウィザード
-datadog-connect setup [--profile <name>]
-
-# 中断セッション再開
-datadog-connect resume [--session <id>]
-
-# リソースロールバック
-datadog-connect rollback [--session <id>]
+npx tsx src/index.ts setup
 ```
+
+すると、対話形式のウィザードが始まります:
+
+```
+🐕 Datadog Connect — かんたんセットアップ
+
+  Step 1: 認証
+  ? Datadogサイト: US1 (datadoghq.com)
+  ? API Key: ********
+  ? Application Key: ********
+  ✅ 認証OK
+
+  Step 2: 機能選択
+  ? どの機能を有効にしますか？ (スペースで選択)
+    ✅ AWS統合
+    ✅ モニター/アラート
+    ✅ ダッシュボード
+    ...
+```
+
+画面の指示に従って選択するだけで、Datadog の設定が自動で完了します。
+
+### Step 3: 結果を確認
+
+セットアップが完了すると:
+- **自動設定されたもの**: Datadog の管理画面にダッシュボードやモニターが作成されます
+- **手動手順書**: `~/.datadog-connect/output/` フォルダに、手動で行う手順（IAMロール作成など）が出力されます
+
+### 環境変数で認証をスキップ（オプション）
+
+毎回キーを入力するのが面倒な場合、環境変数を設定すると自動で認証されます:
+
+```bash
+export DD_API_KEY="あなたのAPIキー"
+export DD_APP_KEY="あなたのApplicationキー"
+npx tsx src/index.ts setup
+```
+
+### その他のコマンド
+
+| コマンド | 説明 |
+|---------|------|
+| `npx tsx src/index.ts setup` | セットアップウィザードを開始 |
+| `npx tsx src/index.ts setup --profile customer-a` | 顧客別にプロファイルを分けて実行 |
+| `npx tsx src/index.ts rollback` | 作成したリソースを削除（やり直したい場合） |
+| `npx tsx src/index.ts rollback --session セッションID` | 特定のセッションのリソースを削除 |
+
+### 困ったときは
+
+- **認証エラー**: API Key と Application Key が正しいか確認してください
+- **機能がスキップされた**: お使いの Datadog プランで利用できない機能は自動でスキップされます
+- **途中で止まった**: 同じコマンドで再度実行すれば、途中から再開できます
 
 ## Security Design
 
