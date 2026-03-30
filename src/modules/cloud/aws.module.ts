@@ -51,13 +51,18 @@ class AwsModule extends BaseModule {
       if (useBrowser) {
         const ready = await browserCtrl.ensureBrowser();
         if (ready) {
-          await browserCtrl.launch();
-          const fetched = await fetchAwsAccountIdFromBrowser(browserCtrl);
-          await browserCtrl.close();
-          if (fetched) {
+          let fetched: string | null = null;
+          try {
+            await browserCtrl.launch();
+            fetched = await fetchAwsAccountIdFromBrowser(browserCtrl);
+          } catch {
+            // ブラウザ操作失敗
+          } finally {
+            await browserCtrl.close();
+          }
+          if (fetched && validateAwsAccountId(fetched) === true) {
             accountId = fetched;
           } else {
-            // フォールバック: 手動入力
             accountId = await input({ message: "AWS Account ID (12桁):", validate: validateAwsAccountId });
           }
         } else {

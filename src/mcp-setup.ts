@@ -3,6 +3,7 @@ import { execSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { escapeShellArg } from "./utils/validators.js";
 import { printBanner, printStep, printSuccess, printError, printInfo } from "./utils/prompts.js";
 import { startSpinner, succeedSpinner, failSpinner } from "./utils/spinner.js";
 
@@ -107,12 +108,12 @@ export async function runMcpSetup(opts: McpSetupOptions): Promise<void> {
 
   try {
     const envFlags = [
-      `-e DD_API_KEY=${apiKey}`,
-      `-e DD_APP_KEY=${appKey}`,
-      `-e DD_SITE=${site}`,
+      `-e DD_API_KEY=${escapeShellArg(apiKey)}`,
+      `-e DD_APP_KEY=${escapeShellArg(appKey)}`,
+      `-e DD_SITE=${escapeShellArg(site)}`,
     ].join(" ");
 
-    const cmd = `claude mcp add -s ${scope} ${envFlags} datadog -- npx -y @winor30/mcp-server-datadog`;
+    const cmd = `claude mcp add -s ${escapeShellArg(scope)} ${envFlags} datadog -- npx -y @winor30/mcp-server-datadog`;
 
     execSync(cmd, { stdio: "pipe" });
     succeedSpinner("Datadog MCP サーバーを登録しました");

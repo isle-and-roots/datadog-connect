@@ -57,6 +57,7 @@ async function deleteResource(
       break;
 
     case "asm_waf_exclusion":
+    case "asm_waf_exclusion_filter":
       await client.security.asm.deleteApplicationSecurityWafExclusionFilter({
         exclusionFilterId: id,
       });

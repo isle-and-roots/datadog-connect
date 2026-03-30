@@ -106,11 +106,22 @@ export async function runResume(opts: ResumeOptions): Promise<void> {
       const result = await mod.execute(config, client);
 
       if (result.success) {
-        succeedSpinner(`${mod.name} 完了`);
+        succeedSpinner(`${mod.name} 完了 (作成: ${result.resources.length}件)`);
         session.modules[failed.id].state = "completed";
         session.modules[failed.id].errors = [];
         if (result.resources.length > 0) {
           session.modules[failed.id].resources.push(...result.resources);
+          mod.createdResources = result.resources;
+        }
+
+        // verify
+        try {
+          const verification = await mod.verify(client);
+          if (verification.success) {
+            printSuccess(`検証OK: ${verification.checks.filter(c => c.passed).length}/${verification.checks.length} チェック通過`);
+          }
+        } catch {
+          // verify失敗はnon-fatal
         }
       } else {
         failSpinner(`${mod.name} 失敗`);

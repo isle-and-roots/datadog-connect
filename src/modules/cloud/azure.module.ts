@@ -6,7 +6,7 @@ import { printManual } from "../../utils/prompts.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
 import type { DatadogClient } from "../../client/datadog-client.js";
 import { writeExecutableFile, getSecureOutputDir } from "../../utils/secure-write.js";
-import { escapeShellArg } from "../../utils/validators.js";
+import { escapeShellArg, validateAzureSubscriptionId } from "../../utils/validators.js";
 import { getBrowserController } from "../../browser/browser-controller.js";
 import { fetchAzureSubscriptionId as fetchAzureSubIdFromBrowser } from "../../browser/cloud-browser.js";
 
@@ -53,16 +53,21 @@ class AzureModule extends BaseModule {
       if (useBrowser) {
         const ready = await browserCtrl.ensureBrowser();
         if (ready) {
-          await browserCtrl.launch();
-          const fetched = await fetchAzureSubIdFromBrowser(browserCtrl);
-          await browserCtrl.close();
-          if (fetched) {
+          let fetched: string | null = null;
+          try {
+            await browserCtrl.launch();
+            fetched = await fetchAzureSubIdFromBrowser(browserCtrl);
+          } catch {
+            // ブラウザ操作失敗
+          } finally {
+            await browserCtrl.close();
+          }
+          if (fetched && validateAzureSubscriptionId(fetched) === true) {
             firstSubscriptionId = fetched;
           } else {
-            // フォールバック: 手動入力
             firstSubscriptionId = await input({
               message: "監視するSubscription ID (1つ目):",
-              validate: (v) => v.trim().length > 0 || "Subscription IDを入力してください",
+              validate: validateAzureSubscriptionId,
             });
           }
         } else {

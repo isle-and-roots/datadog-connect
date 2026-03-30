@@ -22,6 +22,7 @@ const RESOURCE_LABELS: Record<string, string> = {
   cws_agent_policy: "ワークロード保護ポリシー",
   asm_waf_custom_rule: "WAFルール",
   asm_waf_exclusion: "WAF除外フィルター",
+  asm_waf_exclusion_filter: "WAF除外フィルター",
   siem_rule: "検出ルール",
   security_monitoring_rule: "セキュリティ監視ルール",
   cspm_aws_scan_options: "AWS セキュリティスキャン",
