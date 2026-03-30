@@ -1,6 +1,6 @@
 {
   "name": "datadog-connect",
-  "description": "Datadog ワンコマンドセットアップウィザード — 17モジュール対応",
+  "description": "Datadog ワンコマンドセットアップウィザード — 16モジュール対応",
   "version": "0.1.0",
   "keywords": ["datadog", "monitoring", "setup", "security", "observability"]
 }

@@ -1,15 +1,45 @@
 # Datadog Connect
 
 Datadog の全機能セットアップを1コマンドで完結させる CLI ウィザード。
-顧客向け提案パッケージとして、対話形式でヒアリング → 自動設定 → 手順書出力を行います。
+対話形式でヒアリング → Datadog API で自動設定 → 手順書出力まで、ワンストップで行います。
 
 ```bash
 npx datadog-connect setup
 ```
 
-Node.js (v20以上) があれば、これだけで使えます。インストール不要。
+> **Claude Code ユーザーの方へ**: プラグインとして使うとさらに便利です → [Claude Code プラグイン](#claude-code-プラグインとして使う推奨)
 
-> 📖 **操作ガイド（HTML版）**: `docs/guide.html` をブラウザで開くと、画像付きの詳しいガイドが見られます。
+## Claude Code プラグインとして使う（推奨）
+
+Datadog Connect は Claude Code のネイティブプラグインとして動作します。
+自然言語で Datadog のセットアップができます。
+
+### インストール & 登録
+
+```bash
+npm install -g datadog-connect
+claude plugins add $(npm root -g)/datadog-connect
+```
+
+### 使い方
+
+Claude Code で話しかけるだけ:
+
+```
+「Datadogをセットアップして」
+「GCP環境にDatadog監視を設定して」
+「Datadogのセキュリティ機能を有効にして」
+「前回の失敗を再実行して」
+```
+
+スラッシュコマンドでも:
+
+```
+/datadog-connect setup      # セットアップウィザード
+/datadog-connect resume     # 前回の失敗モジュールを再実行
+/datadog-connect rollback   # 作成リソースを削除
+/datadog-connect mcp        # Datadog MCP サーバーを接続
+```
 
 ## Features
 
@@ -52,36 +82,40 @@ Playwright を使って、ログインするだけで各サービスの情報を
 - **Azure**: Subscription ID
 - **Xserver**: VPS情報 + ファイアウォール自動設定
 
-## 使い方（はじめての方向け）
+## CLI として使う（Claude Code なしの場合）
 
 ### 事前に必要なもの
 
 1. **Node.js** (v20以上) — [ダウンロードはこちら](https://nodejs.org/)
-   - インストール後、ターミナルで `node -v` と入力して `v20.x.x` 以上が表示されればOK
 2. **Datadog アカウント** — [Datadog](https://www.datadoghq.com/) でアカウントを作成
-3. **Datadog API Key と Application Key** — 以下の手順で取得:
-   - Datadog にログイン
-   - 左メニュー下の **Organization Settings** > **API Keys** で API Key をコピー
-   - 同じ画面の **Application Keys** で Application Key を作成してコピー
+3. **Datadog API Key と Application Key**:
+   - Datadog > **Organization Settings** > **API Keys** で API Key をコピー
+   - 同画面の **Application Keys** で Application Key を作成してコピー
    - **または**: ブラウザ自動取得を使えば、ログインするだけでOK
 
-### Step 1: ツールをダウンロード
+### npx で実行（インストール不要）
 
-ターミナル（Mac: ターミナル.app / Windows: PowerShell）を開いて、以下を実行:
+```bash
+npx datadog-connect setup
+```
+
+### グローバルインストール
+
+```bash
+npm install -g datadog-connect
+datadog-connect setup
+```
+
+### ソースから実行
 
 ```bash
 git clone https://github.com/isle-and-roots/datadog-connect.git
 cd datadog-connect
 npm install
-```
-
-### Step 2: セットアップウィザードを起動
-
-```bash
 npm run setup
 ```
 
-すると、対話形式のウィザードが始まります:
+### ウィザードの流れ
 
 ```
 🐕 Datadog Connect — かんたんセットアップ
@@ -107,48 +141,36 @@ npm run setup
   Step 4: モニター/アラート [2/3]
   ✅ モニター/アラート 完了 (作成: 25件)
 
-  📊 作成: 30件 | 手動手順: 0件 | エラー: 0件
-
-  📋 次のステップ
-  ℹ️  モニターは約10分後に初回チェックを実行します。
+  全て成功 (成功率 100%)
+  作成: 30件 | 手動手順: 0件 | エラー: 0件
 ```
 
-### Step 3: 結果を確認
+### 結果を確認
 
 セットアップが完了すると:
 - **自動設定されたもの**: Datadog の管理画面にダッシュボードやモニターが作成されます
-- **手動手順書**: `~/.datadog-connect/output/` フォルダに、手動で行う手順（IAMロール作成など）が出力されます
+- **手動手順書**: `~/.datadog-connect/output/` に手動で行う手順が出力されます
 
-### 環境変数で認証をスキップ（オプション）
-
-毎回キーを入力するのが面倒な場合、環境変数を設定すると自動で認証されます:
-
-```bash
-export DD_API_KEY="あなたのAPIキー"
-export DD_APP_KEY="あなたのApplicationキー"
-npm run setup
-```
-
-### コマンド一覧
+## コマンド一覧
 
 | コマンド | 説明 |
 |---------|------|
-| `npm run setup` | セットアップウィザードを開始 |
-| `npm run resume` | 前回の失敗モジュールだけ再実行 |
-| `npm run rollback` | 作成したリソースを削除（やり直したい場合） |
-| `npm run mcp` | Datadog MCP サーバーを Claude Code に接続 |
+| `npx datadog-connect setup` | セットアップウィザードを開始 |
+| `npx datadog-connect resume` | 前回の失敗モジュールだけ再実行 |
+| `npx datadog-connect rollback` | 作成したリソースを削除 |
+| `npx datadog-connect mcp` | Datadog MCP サーバーを Claude Code に接続 |
 
-### Claude Code から Datadog を使う（MCP接続）
+## MCP接続（Claude Code 連携）
 
-1コマンドで Datadog MCP サーバーを Claude Code に接続できます:
+Datadog MCP サーバーを Claude Code に接続して、AI経由でDatadogを操作できます:
 
 ```bash
 export DD_API_KEY="あなたのAPIキー"
 export DD_APP_KEY="あなたのApplicationキー"
-npm run mcp
+npx datadog-connect mcp
 ```
 
-接続後、Claude Code で以下のように Datadog を操作できます:
+接続後、Claude Code で:
 
 ```
 「Datadogの直近のアラートを確認して」
@@ -157,44 +179,27 @@ npm run mcp
 「新しいモニターを作成して」
 ```
 
-### 困ったときは
+## 環境変数
 
-- **認証エラー**: API Key と Application Key が正しいか確認してください。3回まで再入力できます
-- **Datadogサイトの選び方**: ログインURL が `app.datadoghq.com` なら US1、`ap1.datadoghq.com` なら AP1 です
-- **機能がスキップされた**: お使いの Datadog プランで利用できない機能は自動でスキップされます
-- **途中で止まった**: `npm run resume` で前回の失敗モジュールだけ再実行できます
-- **設定を元に戻したい**: `npm run rollback` で作成リソースを削除できます
-- **ブラウザ自動取得がうまくいかない**: 手動入力に自動で切り替わります
-
-## Claude Code プラグインとして使う
-
-Datadog Connect は Claude Code のネイティブプラグインとしても動作します。
-
-### セットアップ
+毎回キーを入力するのが面倒な場合:
 
 ```bash
-# プラグインとして登録
-claude plugins add /path/to/datadog-connect
+export DD_API_KEY="あなたのAPIキー"
+export DD_APP_KEY="あなたのApplicationキー"
+export DD_SITE="ap1.datadoghq.com"  # オプション（デフォルト: datadoghq.com）
+npx datadog-connect setup
 ```
 
-### 使い方
+## トラブルシューティング
 
-Claude Code で以下のように話しかけるだけ:
-
-```
-「Datadogをセットアップして」
-「GCP環境にDatadog監視を設定して」
-「Datadogのセキュリティ機能を有効にして」
-```
-
-または直接コマンド:
-
-```
-/datadog-connect setup
-/datadog-connect resume
-/datadog-connect rollback
-/datadog-connect mcp
-```
+| 問題 | 解決方法 |
+|------|---------|
+| 認証エラー | API Key と Application Key が正しいか確認。3回まで再入力可 |
+| サイトの選び方 | ログインURLで判別: `app.datadoghq.com` → US1、`ap1.datadoghq.com` → AP1 |
+| 機能がスキップされた | Datadog プランで利用できない機能は自動スキップ |
+| 途中で止まった | `npx datadog-connect resume` で失敗モジュールだけ再実行 |
+| 設定を元に戻したい | `npx datadog-connect rollback` で作成リソースを削除 |
+| ブラウザ自動取得の失敗 | 手動入力に自動で切り替わります |
 
 ## Security Design
 
@@ -215,3 +220,7 @@ Claude Code で以下のように話しかけるだけ:
 - Playwright (ブラウザ自動化、optional)
 - Zod (バリデーション)
 - tsup (ビルド)
+
+## License
+
+MIT

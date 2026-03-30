@@ -958,7 +958,7 @@
             <span class="code-title">ターミナル</span>
           </div>
           <div class="code-body">
-            <code><span class="cmd">npm run setup</span></code>
+            <code><span class="cmd">npx datadog-connect setup</span></code>
           </div>
         </div>
         <p class="step-desc" style="margin-top:0.5rem">起動すると、最初に認証方法を選択します。<strong>ブラウザで自動取得</strong>がおすすめです。認証に失敗しても3回まで再入力可能。API Key の確認方法も案内されます。</p>
@@ -970,7 +970,7 @@
             <span class="terminal-title">datadog-connect</span>
           </div>
           <div class="terminal-body">
-            <pre><code><span class="dim">$ npm run setup</span>
+            <pre><code><span class="dim">$ npx datadog-connect setup</span>
 
 <span class="cyan">🐕 Datadog Connect — かんたんセットアップ</span>
 
@@ -1102,7 +1102,7 @@
         <ul style="color:var(--text-secondary);font-size:0.925rem;line-height:2;list-style:none;padding-left:0;">
           <li>🎉 <strong style="color:var(--text)">自動設定済み</strong> — Datadogの管理画面にダッシュボードやモニターが作成されています</li>
           <li>📄 <strong style="color:var(--text)">手動手順書</strong> — <code style="background:rgba(99,44,166,0.2);padding:2px 8px;border-radius:5px;font-size:0.82rem;color:#B794F4">~/.datadog-connect/output/</code> にIAMロール作成など手動手順が出力されます</li>
-          <li>↩️ <strong style="color:var(--text)">やり直したい場合</strong> — <code style="background:rgba(99,44,166,0.2);padding:2px 8px;border-radius:5px;font-size:0.82rem;color:#B794F4">npm run rollback</code> で作成したリソースを削除できます</li>
+          <li>↩️ <strong style="color:var(--text)">やり直したい場合</strong> — <code style="background:rgba(99,44,166,0.2);padding:2px 8px;border-radius:5px;font-size:0.82rem;color:#B794F4">npx datadog-connect rollback</code> で作成したリソースを削除できます</li>
         </ul>
       </div>
 
@@ -1126,19 +1126,19 @@
       </thead>
       <tbody>
         <tr>
-          <td><code>npm run setup</code></td>
+          <td><code>npx datadog-connect setup</code></td>
           <td>セットアップウィザードを起動します。初回はここから。</td>
         </tr>
         <tr>
-          <td><code>npm run resume</code></td>
+          <td><code>npx datadog-connect resume</code></td>
           <td>前回途中で止まったセットアップを、失敗した箇所から再開します。</td>
         </tr>
         <tr>
-          <td><code>npm run rollback</code></td>
+          <td><code>npx datadog-connect rollback</code></td>
           <td>作成したリソースをまとめて削除します。やり直したいときに使用。</td>
         </tr>
         <tr>
-          <td><code>npm run mcp</code></td>
+          <td><code>npx datadog-connect mcp</code></td>
           <td>Claude Code と Datadog を接続して、AI経由でDatadogを操作できるようにします。</td>
         </tr>
       </tbody>
@@ -1147,7 +1147,7 @@
     <div style="margin-top:2rem;padding:1.5rem;background:rgba(0,196,180,0.07);border:1px solid rgba(0,196,180,0.2);border-radius:12px;">
       <div style="font-size:0.9rem;font-weight:700;color:var(--accent);margin-bottom:0.5rem;">💡 Claude Code から Datadog を操作する（MCP接続）</div>
       <p style="font-size:0.875rem;color:var(--text-secondary);line-height:1.7;">
-        <code style="background:rgba(99,44,166,0.2);padding:2px 8px;border-radius:5px;font-size:0.82rem;color:#B794F4">npm run mcp</code> を実行すると、Claude Code（AIアシスタント）からDatadogを自然言語で操作できるようになります。<br>
+        <code style="background:rgba(99,44,166,0.2);padding:2px 8px;border-radius:5px;font-size:0.82rem;color:#B794F4">npx datadog-connect mcp</code> を実行すると、Claude Code（AIアシスタント）からDatadogを自然言語で操作できるようになります。<br>
         「直近のアラートを確認して」「CPU使用率が高いホストを調べて」などと話しかけるだけでDatadogが動作します。
       </p>
     </div>
@@ -1160,8 +1160,18 @@
     <div class="section-label">Claude Code プラグイン</div>
     <h2 class="section-title">Claude Code プラグイン</h2>
     <p style="text-align: center; color: var(--text-secondary); margin-bottom: 2rem;">
-      Claude Code のネイティブプラグインとしても動作します。
+      Claude Code のネイティブプラグインとしても動作します。以下のコマンドで登録できます。
     </p>
+    <div class="code-block" style="max-width:600px;margin:0 auto 2rem;">
+      <div class="code-header">
+        <span class="code-dot r"></span><span class="code-dot y"></span><span class="code-dot g"></span>
+        <span class="code-title">プラグイン登録</span>
+      </div>
+      <div class="code-body">
+        <code><span class="cmd">npm install -g datadog-connect</span></code><br>
+        <code><span class="cmd">claude plugins add $(npm root -g)/datadog-connect</span></code>
+      </div>
+    </div>
     <div class="features-grid">
       <div class="feature-card">
         <div class="feature-icon">💬</div>
@@ -1176,7 +1186,7 @@
       <div class="feature-card">
         <div class="feature-icon">🔧</div>
         <h3>CLIスタンドアロン</h3>
-        <p><code>npm run setup</code> で Claude Code なしでも動作。顧客デモに最適。</p>
+        <p><code>npx datadog-connect setup</code> で Claude Code なしでも動作。顧客デモに最適。</p>
       </div>
     </div>
   </div>
@@ -1230,7 +1240,7 @@
         </button>
         <div class="faq-a">
           <div class="faq-a-inner">
-            <code>npm run resume</code> を実行すると、<strong>失敗したモジュールだけ</strong>を再実行できます。最初からやり直す必要はありません。<br><br>
+            <code>npx datadog-connect resume</code> を実行すると、<strong>失敗したモジュールだけ</strong>を再実行できます。最初からやり直す必要はありません。<br><br>
             完了済みのモジュールはスキップされるので、中断した箇所から続けて実行できます。
           </div>
         </div>
@@ -1243,7 +1253,7 @@
         </button>
         <div class="faq-a">
           <div class="faq-a-inner">
-            <code>npm run rollback</code> を実行すると、このツールで作成したダッシュボード・モニターなどのリソースをまとめて削除できます。<br><br>
+            <code>npx datadog-connect rollback</code> を実行すると、このツールで作成したダッシュボード・モニターなどのリソースをまとめて削除できます。<br><br>
             ロールバックは作成したリソースのリストを参照して実行されるため、手動で作成したものは削除されません。安心して実行してください。
           </div>
         </div>
@@ -1256,7 +1266,7 @@
         </button>
         <div class="faq-a">
           <div class="faq-a-inner">
-            <code>npm run mcp</code> を実行することで、Claude Code（AIアシスタント）とDatadogを接続できます。<br><br>
+            <code>npx datadog-connect mcp</code> を実行することで、Claude Code（AIアシスタント）とDatadogを接続できます。<br><br>
             接続後は Claude Code で次のように話しかけるだけで Datadog を操作できます：<br>
             &nbsp;&nbsp;・「Datadogの直近のアラートを確認して」<br>
             &nbsp;&nbsp;・「CPU使用率が高いホストを教えて」<br>

@@ -36,17 +36,41 @@ export function printSummary(data: SummaryData): void {
   console.log(chalk.bold.cyan("  📊 セットアップ完了レポート"));
   console.log(chalk.dim("  ─".repeat(25)));
 
-  // Statistics summary
-  console.log();
-  console.log(chalk.bold(`  📊 作成: ${data.resources.length}件 | 手動手順: ${data.manualSteps.length}件 | エラー: ${data.errors.length}件`));
+  // Statistics bar
+  const total = data.resources.length + data.manualSteps.length + data.errors.length;
+  const successRate = total > 0
+    ? Math.round((data.resources.length / (data.resources.length + data.errors.length)) * 100)
+    : 100;
+  const statusColor = data.errors.length === 0 ? chalk.green : data.resources.length > 0 ? chalk.yellow : chalk.red;
+  const statusLabel = data.errors.length === 0 ? "全て成功" : data.resources.length > 0 ? "部分成功" : "失敗";
 
-  // Resources
+  console.log();
+  console.log(statusColor.bold(`  ${statusLabel} (成功率 ${successRate}%)`));
+  console.log(chalk.bold(`  作成: ${chalk.green(String(data.resources.length))}件 | 手動手順: ${chalk.yellow(String(data.manualSteps.length))}件 | エラー: ${chalk.red(String(data.errors.length))}件`));
+
+  // Resources grouped by type
   if (data.resources.length > 0) {
     console.log();
     console.log(chalk.bold("  作成リソース:"));
+
+    // Group by type for cleaner display
+    const grouped = new Map<string, ResourceRecord[]>();
     for (const r of data.resources) {
-      const label = RESOURCE_LABELS[r.type] ?? r.type;
-      console.log(chalk.green(`    ✅ ${label}: ${r.name}`));
+      const list = grouped.get(r.type) ?? [];
+      list.push(r);
+      grouped.set(r.type, list);
+    }
+
+    for (const [type, items] of grouped) {
+      const label = RESOURCE_LABELS[type] ?? type;
+      if (items.length === 1) {
+        console.log(chalk.green(`    ✅ ${label}: ${items[0].name}`));
+      } else {
+        console.log(chalk.green(`    ✅ ${label} (${items.length}件):`));
+        for (const item of items) {
+          console.log(chalk.green(`       • ${item.name}`));
+        }
+      }
     }
   }
 
@@ -54,8 +78,8 @@ export function printSummary(data: SummaryData): void {
   if (data.manualSteps.length > 0) {
     console.log();
     console.log(chalk.bold("  手動手順:"));
-    for (const step of data.manualSteps) {
-      console.log(chalk.yellow(`    📋 ${step.title}`));
+    for (const [i, step] of data.manualSteps.entries()) {
+      console.log(chalk.yellow(`    📋 ${i + 1}. ${step.title}`));
       if (step.outputFile) {
         console.log(chalk.dim(`       → ${step.outputFile}`));
       }

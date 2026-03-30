@@ -4,9 +4,17 @@
   "description": "Datadog ワンコマンドセットアップウィザード — 16モジュール対応",
   "type": "module",
   "license": "MIT",
+  "author": "Isle and Roots Inc.",
+  "homepage": "https://github.com/isle-and-roots/datadog-connect#readme",
+  "bugs": {
+    "url": "https://github.com/isle-and-roots/datadog-connect/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/isle-and-roots/datadog-connect.git"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "datadog",

@@ -79,8 +79,10 @@ class GcpModule extends BaseModule {
       default: `datadog-integration@${projectId}.iam.gserviceaccount.com`,
       validate: (v) => {
         if (!v.trim()) return "サービスアカウント Email は必須です";
-        if (!v.includes("@") || !v.includes(".iam.gserviceaccount.com"))
-          return "形式: name@project.iam.gserviceaccount.com";
+        // RFC準拠の基本チェック + GCP SA形式の検証
+        const saPattern = /^[a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z][a-z0-9-]{4,28}[a-z0-9]\.iam\.gserviceaccount\.com$/;
+        if (!saPattern.test(v))
+          return "形式: sa-name@project-id.iam.gserviceaccount.com (英小文字・数字・ハイフン)";
         return true;
       },
     });
@@ -108,9 +110,7 @@ class GcpModule extends BaseModule {
             attributes: {
               clientEmail: config.serviceAccountEmail,
               automute: config.automute,
-              additionalProperties: {
-                project_id: config.projectId,
-              },
+              hostFilters: config.tags.length > 0 ? config.tags : undefined,
             },
           },
         },
@@ -154,24 +154,16 @@ class GcpModule extends BaseModule {
       const resp = await client.v2.gcp.listGCPSTSAccounts();
       const accounts = resp.data ?? [];
 
-      // 作成済みリソースがある場合は projectId で照合
       const targetProjectId = this.createdResources[0]?.id;
       let found: boolean;
       let detail: string;
 
       if (targetProjectId) {
+        // clientEmail の @project-id. 部分で照合（API公式フィールド）
         found = accounts.some((a) => {
-          const account = a as unknown as {
-            id?: string;
-            attributes?: {
-              clientEmail?: string;
-              additionalProperties?: { project_id?: string };
-            };
-          };
-          // 複数パターンで照合（API実装に依存しない堅牢な判定）
-          return account.id === targetProjectId
-            || account.attributes?.additionalProperties?.project_id === targetProjectId
-            || account.attributes?.clientEmail?.includes(`@${targetProjectId}.`);
+          const attrs = (a as unknown as { attributes?: { clientEmail?: string } }).attributes;
+          const email = attrs?.clientEmail ?? "";
+          return email.includes(`@${targetProjectId}.iam.gserviceaccount.com`);
         });
         detail = found
           ? `Project ID ${targetProjectId} のアカウントが見つかりました`
@@ -234,12 +226,28 @@ for ROLE in "\${ROLES[@]}"; do
     --quiet
 done
 
-# 3. Datadog に Workload Identity Federation を設定
+# 3. Workload Identity Federation (WIF) を設定
 echo "3. Workload Identity Federation を設定中..."
-# DatadogのSTS統合はキーレス認証を使用します。
-# サービスアカウントキーの生成は不要です。
-# Datadog コンソールで GCP 統合設定を確認してください。
-
+echo ""
+echo "Datadog の STS 統合はキーレス認証（Workload Identity Federation）を使用します。"
+echo "サービスアカウントキーの生成は不要です。"
+echo ""
+echo "--- WIF 設定手順 ---"
+echo "1. Datadog コンソールで GCP 統合ページを開く:"
+echo "   https://app.datadoghq.com/integrations/google-cloud-platform"
+echo ""
+echo "2. 'Add GCP Account' → 'Service Account Impersonation' を選択"
+echo ""
+echo "3. 表示される Datadog の Workload Identity Pool 情報をコピー:"
+echo "   - Pool Provider: (Datadog コンソールに表示される値)"
+echo "   - Service Account: (上で作成した \${SA_EMAIL})"
+echo ""
+echo "4. GCP 側で WIF を設定:"
+gcloud iam service-accounts add-iam-policy-binding "\${SA_EMAIL}" \\
+  --project="\${PROJECT_ID}" \\
+  --role="roles/iam.workloadIdentityUser" \\
+  --member="principalSet://iam.googleapis.com/projects/\${PROJECT_ID}/locations/global/workloadIdentityPools/datadog-pool/*" \\
+  --quiet 2>/dev/null || echo "   ⚠️  WIF バインディングは Datadog コンソールの Pool 情報確定後に手動で実行してください。"
 echo ""
 echo "=== セットアップ完了 ==="
 echo "Datadog コンソール (https://app.datadoghq.com/integrations/google-cloud-platform) で"

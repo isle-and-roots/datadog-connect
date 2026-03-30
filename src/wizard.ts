@@ -264,20 +264,31 @@ export async function runSetup(opts: { profile: string }): Promise<void> {
   console.log();
   console.log(chalk.bold.cyan("  📋 次のステップ"));
   console.log(chalk.dim("  ─").repeat(25));
+  console.log();
+
+  let stepNo = 1;
 
   if (allManualSteps.length > 0) {
-    printInfo(`手動手順が ${allManualSteps.length} 件あります。出力ファイルを確認してください。`);
+    printInfo(`${stepNo++}. 手動手順を実行 (${allManualSteps.length}件) — 出力ファイルを確認してください`);
   }
 
   if (allResources.some((r) => r.type === "monitor")) {
-    printInfo("モニターは約10分後に初回チェックを実行します。");
+    printInfo(`${stepNo++}. モニターの初回チェック — 約10分後に実行されます`);
+  }
+
+  if (allResources.some((r) => r.type === "dashboard")) {
+    printInfo(`${stepNo++}. ダッシュボードを確認 — Datadog コンソールで表示を確認`);
+  }
+
+  if (allResources.some((r) => r.type.includes("aws") || r.type.includes("gcp") || r.type.includes("azure"))) {
+    printInfo(`${stepNo++}. クラウド統合を検証 — メトリクスが届き始めるまで数分かかります`);
   }
 
   if (allErrors.length > 0) {
-    printInfo(`失敗した ${allErrors.length} 件は datadog-connect resume で再実行できます。`);
+    printInfo(`${stepNo++}. 失敗モジュールの再実行 — ${chalk.cyan("datadog-connect resume")} で再試行`);
   }
 
-  printInfo("設定内容を確認するには Datadog (https://app.datadoghq.com) にログインしてください。");
+  printInfo(`${stepNo}. Datadog コンソールで確認 — https://app.datadoghq.com`);
 
   // 完了後ダッシュボード表示
   if (allResources.some((r) => r.type === "dashboard")) {

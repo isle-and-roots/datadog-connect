@@ -1,5 +1,6 @@
 import { select, password } from "@inquirer/prompts";
 import { client as ddClient, v1 } from "@datadog/datadog-api-client";
+import chalk from "chalk";
 import { DATADOG_SITES } from "../config/constants.js";
 import type { Credentials, DatadogSite } from "../config/types.js";
 import { startSpinner, succeedSpinner, failSpinner } from "../utils/spinner.js";
@@ -99,9 +100,25 @@ export async function promptCredentials(profile: string): Promise<Credentials> {
   }
 
   // 以下、手動入力フロー（最大3回リトライ）
-  printInfo("ヒント: ログインURL (app.datadoghq.com or app.datadoghq.eu 等) でサイトを判別できます。");
+  console.log();
+  console.log(chalk.dim("  ┌─────────────────────────────────────────────────┐"));
+  console.log(chalk.dim("  │  💡 サイトの見分け方:                           │"));
+  console.log(chalk.dim("  │    ログインURLが app.datadoghq.com → US1       │"));
+  console.log(chalk.dim("  │    ログインURLが ap1.datadoghq.com → AP1       │"));
+  console.log(chalk.dim("  │    ログインURLが app.datadoghq.eu  → EU        │"));
+  console.log(chalk.dim("  │    日本のお客様は通常 US1 または AP1 です       │"));
+  console.log(chalk.dim("  │                                                 │"));
+  console.log(chalk.dim("  │  キーの場所:                                    │"));
+  console.log(chalk.dim("  │    Organization Settings > API Keys             │"));
+  console.log(chalk.dim("  │    Organization Settings > Application Keys     │"));
+  console.log(chalk.dim("  └─────────────────────────────────────────────────┘"));
+  console.log();
 
   for (let attempt = 1; attempt <= 3; attempt++) {
+    if (attempt > 1) {
+      printInfo(`再試行 (${attempt}/3) — API Key と Application Key を確認してください。`);
+    }
+
     const site = await select<DatadogSite>({
       message: "Datadogサイト:",
       choices: DATADOG_SITES.map((s) => ({ value: s.value, name: s.label })),
@@ -120,10 +137,6 @@ export async function promptCredentials(profile: string): Promise<Credentials> {
     }
 
     failSpinner(`認証失敗 (${attempt}/3)`);
-    if (attempt < 3) {
-      printInfo("API Key または Application Key を確認して、もう一度入力してください。");
-      printInfo("→ Datadog > Organization Settings > API Keys で確認できます。");
-    }
   }
 
   // 3回失敗
