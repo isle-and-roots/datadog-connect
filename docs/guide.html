@@ -1154,34 +1154,35 @@
   </div>
 </section>
 
-<!-- ===== Claude Code プラグイン ===== -->
+<!-- ===== Claude Code 連携 (MCP) ===== -->
 <section id="plugin" class="section">
   <div class="container">
-    <div class="section-label">Claude Code プラグイン</div>
-    <h2 class="section-title">Claude Code プラグイン</h2>
+    <div class="section-label">Claude Code 連携</div>
+    <h2 class="section-title">Claude Code で使う（MCP接続）</h2>
     <p style="text-align: center; color: var(--text-secondary); margin-bottom: 2rem;">
-      Claude Code のネイティブプラグインとしても動作します。以下のコマンドで登録できます。
+      MCP サーバーを接続して、Claude Code から Datadog を自然言語で操作できます。
     </p>
     <div class="code-block" style="max-width:600px;margin:0 auto 2rem;">
       <div class="code-header">
         <span class="code-dot r"></span><span class="code-dot y"></span><span class="code-dot g"></span>
-        <span class="code-title">プラグイン登録</span>
+        <span class="code-title">MCP接続（1コマンド）</span>
       </div>
       <div class="code-body">
-        <code><span class="cmd">npm install -g datadog-connect</span></code><br>
-        <code><span class="cmd">claude plugins install $(npm root -g)/datadog-connect</span></code>
+        <code><span class="cmd">export DD_API_KEY="あなたのAPIキー"</span></code><br>
+        <code><span class="cmd">export DD_APP_KEY="あなたのApplicationキー"</span></code><br>
+        <code><span class="cmd">npx datadog-connect mcp</span></code>
       </div>
     </div>
     <div class="features-grid">
       <div class="feature-card">
         <div class="feature-icon">💬</div>
-        <h3>話しかけるだけ</h3>
-        <p>「Datadogをセットアップして」と Claude Code に話しかけるだけで、スキルが自動起動します。</p>
+        <h3>自然言語で操作</h3>
+        <p>「直近のアラートを確認して」「CPU使用率が高いホストを調べて」と話しかけるだけでDatadogが動作します。</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">⚡</div>
-        <h3>コマンド直接呼び出し</h3>
-        <p><code>/datadog-connect setup</code> で直接実行も可能。resume, rollback, mcp も対応。</p>
+        <h3>1コマンド接続</h3>
+        <p><code>npx datadog-connect mcp</code> で MCP サーバーを Claude Code に自動登録。すぐに使えます。</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">🔧</div>
