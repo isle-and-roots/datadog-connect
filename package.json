@@ -1,0 +1,30 @@
+{
+  "name": "datadog-connect",
+  "version": "0.1.0",
+  "description": "Datadog ワンコマンドセットアップウィザード",
+  "type": "module",
+  "bin": {
+    "datadog-connect": "./dist/index.js"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@datadog/datadog-api-client": "^1.53.0",
+    "@inquirer/prompts": "^8.3.0",
+    "chalk": "^5.4.1",
+    "commander": "^14.0.0",
+    "ora": "^9.3.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
