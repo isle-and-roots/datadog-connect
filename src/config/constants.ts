@@ -1,11 +1,11 @@
 import type { DatadogSite } from "./types.js";
 
 export const DATADOG_SITES: { value: DatadogSite; label: string }[] = [
-  { value: "datadoghq.com", label: "US1 (datadoghq.com) — 日本のお客様はこちら" },
+  { value: "datadoghq.com", label: "US1 (datadoghq.com) — 日本のお客様はUS1またはAP1" },
+  { value: "ap1.datadoghq.com", label: "AP1 (ap1.datadoghq.com) — 日本/アジア太平洋リージョン" },
   { value: "datadoghq.eu", label: "EU (datadoghq.eu)" },
   { value: "us3.datadoghq.com", label: "US3 (us3.datadoghq.com)" },
   { value: "us5.datadoghq.com", label: "US5 (us5.datadoghq.com)" },
-  { value: "ap1.datadoghq.com", label: "AP1 (ap1.datadoghq.com)" },
   { value: "ddog-gov.com", label: "GOV (ddog-gov.com) — 米国政府向け" },
 ];
 
