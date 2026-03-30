@@ -3,6 +3,12 @@
 ## 実行コマンド
 
 ```bash
+npx datadog-connect setup
+```
+
+またはプラグインルートから:
+
+```bash
 cd ${CLAUDE_PLUGIN_ROOT}
 npm run setup
 ```
@@ -21,7 +27,7 @@ Step 2: セットアップタイプ
   ☁️  GCP環境向け — GCP + モニター + ダッシュボード + APM + ログ
   🔒 セキュリティ重視 — CSPM + CWS + ASM + SIEM + SDS
   🖥️  Xserver向け — Xserver + モニター + ダッシュボード
-  🚀 フル — 全17モジュール
+  🚀 フル — 全16モジュール
   ⚙️  カスタム — Cloud/Feature/Security カテゴリ別に選択
 
 Step 3+: 各モジュール設定 [1/N]
