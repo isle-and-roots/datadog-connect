@@ -2,11 +2,13 @@ import { select, input, confirm } from "@inquirer/prompts";
 import { BaseModule } from "../base-module.js";
 import { registerModule } from "../registry.js";
 import { promptTags } from "../shared/tags.js";
-import { printManual } from "../../utils/prompts.js";
+import { printManual, printInfo, printSuccess } from "../../utils/prompts.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
 import type { DatadogClient } from "../../client/datadog-client.js";
 import { writeSecureFile, writeExecutableFile, getSecureOutputDir } from "../../utils/secure-write.js";
 import { escapeShellArg } from "../../utils/validators.js";
+import { getBrowserController } from "../../browser/browser-controller.js";
+import { authenticateXserver, fetchXserverVpsList, configureXserverFirewall } from "../../browser/xserver-browser.js";
 
 const XSERVER_TYPES = [
   { value: "vps", name: "Xserver VPS" },
@@ -23,6 +25,8 @@ interface XserverConfig extends ModuleConfig {
   enableNginx: boolean;
   enableMysql: boolean;
   tags: string[];
+  usedBrowser: boolean;
+  vpsId: string;
 }
 
 class XserverModule extends BaseModule {
@@ -38,19 +42,70 @@ class XserverModule extends BaseModule {
       choices: XSERVER_TYPES,
     });
 
-    const host = await input({
-      message: "サーバーホスト名 (SSH接続先):",
-      validate: (v) => v.trim().length > 0 || "ホスト名を入力してください",
-    });
+    let host = "";
+    let port = 22;
+    let user = "root";
+    let usedBrowser = false;
+    let vpsId = "";
+
+    // ブラウザ自動取得オプション
+    const browserCtrl = getBrowserController();
+    if (await browserCtrl.isAvailable()) {
+      const useBrowser = await confirm({
+        message: "ブラウザで Xserver の情報を自動取得しますか？",
+        default: true,
+      });
+
+      if (useBrowser) {
+        const ready = await browserCtrl.ensureBrowser();
+        if (ready) {
+          await browserCtrl.launch();
+          const loggedIn = await authenticateXserver(browserCtrl);
+
+          if (loggedIn) {
+            const vpsList = await fetchXserverVpsList(browserCtrl);
+
+            if (vpsList.length > 0) {
+              // VPS選択
+              const selectedVps = await select({
+                message: "対象サーバーを選択:",
+                choices: vpsList.map((v) => ({
+                  value: v,
+                  name: `${v.id || v.ip} — ${v.hostname || v.ip}${v.status === "running" ? " (稼働中)" : ""}`,
+                })),
+              });
+
+              host = selectedVps.ip || selectedVps.hostname;
+              vpsId = selectedVps.id;
+              usedBrowser = true;
+              printSuccess(`SSH接続先: ${host}`);
+            } else {
+              printInfo("VPS情報を自動取得できませんでした。手動で入力してください。");
+              await browserCtrl.close();
+            }
+          } else {
+            await browserCtrl.close();
+          }
+        }
+      }
+    }
+
+    // ブラウザで取得できなかった場合は手動入力
+    if (!host) {
+      host = await input({
+        message: "サーバーホスト名 (SSH接続先):",
+        validate: (v) => v.trim().length > 0 || "ホスト名を入力してください",
+      });
+    }
 
     const portStr = await input({
       message: "SSHポート:",
       default: "22",
       validate: (v) => /^\d+$/.test(v) || "ポート番号を入力してください",
     });
-    const port = parseInt(portStr, 10);
+    port = parseInt(portStr, 10);
 
-    const user = await input({
+    user = await input({
       message: "SSHユーザー名:",
       default: "root",
     });
@@ -72,7 +127,7 @@ class XserverModule extends BaseModule {
 
     const tags = await promptTags();
 
-    return { serverType, host, port, user, enableProcess, enableNginx, enableMysql, tags };
+    return { serverType, host, port, user, enableProcess, enableNginx, enableMysql, tags, usedBrowser, vpsId };
   }
 
   async execute(config: XserverConfig): Promise<ExecutionResult> {
@@ -98,20 +153,32 @@ class XserverModule extends BaseModule {
       outputFile: scriptPath,
     });
 
-    // Firewall instructions
-    manualSteps.push({
-      title: "Xserver ファイアウォール設定",
-      description: "Datadog Agent がデータを送信するため、以下のポートを開放してください。",
-      commands: [
-        `# Xserver管理画面 → ファイアウォール設定`,
-        `# 以下のアウトバウンドルールを追加:`,
-        `# - TCP 443 (HTTPS) → *.datadoghq.com`,
-        `# - TCP 443 (HTTPS) → *.logs.datadoghq.com`,
-        ``,
-        `# iptablesの場合:`,
-        `iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT`,
-      ],
-    });
+    // Firewall: ブラウザ自動設定 or 手動手順
+    let firewallConfigured = false;
+    if (config.usedBrowser && config.vpsId) {
+      const browserCtrl = getBrowserController();
+      // ブラウザがまだ開いている場合はそのまま使う
+      if (browserCtrl.getPage()) {
+        firewallConfigured = await configureXserverFirewall(browserCtrl, config.vpsId);
+        await browserCtrl.close();
+      }
+    }
+
+    if (!firewallConfigured) {
+      manualSteps.push({
+        title: "Xserver ファイアウォール設定",
+        description: "Datadog Agent がデータを送信するため、以下のポートを開放してください。",
+        commands: [
+          `# Xserver管理画面 → ファイアウォール設定`,
+          `# 以下のアウトバウンドルールを追加:`,
+          `# - TCP 443 (HTTPS) → *.datadoghq.com`,
+          `# - TCP 443 (HTTPS) → *.logs.datadoghq.com`,
+          ``,
+          `# iptablesの場合:`,
+          `iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT`,
+        ],
+      });
+    }
 
     // Nginx config
     if (config.enableNginx) {
