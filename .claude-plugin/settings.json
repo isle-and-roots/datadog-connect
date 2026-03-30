@@ -1,0 +1,6 @@
+{
+  "permissions": {
+    "allowedTools": ["Bash", "Read", "Write", "Edit"],
+    "networkAccess": true
+  }
+}
