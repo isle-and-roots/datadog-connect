@@ -108,6 +108,29 @@ npx tsx src/index.ts setup
 | `npx tsx src/index.ts setup --profile customer-a` | 顧客別にプロファイルを分けて実行 |
 | `npx tsx src/index.ts rollback` | 作成したリソースを削除（やり直したい場合） |
 | `npx tsx src/index.ts rollback --session セッションID` | 特定のセッションのリソースを削除 |
+| `npx tsx src/index.ts mcp` | **Datadog MCP サーバーを Claude Code に接続** |
+
+### Claude Code から Datadog を使う（MCP接続）
+
+1コマンドで Datadog MCP サーバーを Claude Code に接続できます:
+
+```bash
+# 環境変数を設定
+export DD_API_KEY="あなたのAPIキー"
+export DD_APP_KEY="あなたのApplicationキー"
+
+# MCP サーバーを接続
+npx tsx src/index.ts mcp
+```
+
+接続後、Claude Code で以下のように Datadog を操作できます:
+
+```
+「Datadogの直近のアラートを確認して」
+「CPU使用率が高いホストを調べて」
+「本番環境のエラーログを検索して」
+「新しいモニターを作成して」
+```
 
 ### 困ったときは
 

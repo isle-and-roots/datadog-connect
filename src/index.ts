@@ -2,6 +2,7 @@ import { Command } from "commander";
 import { APP_NAME, APP_VERSION } from "./config/constants.js";
 import { runSetup } from "./wizard.js";
 import { runRollback } from "./rollback.js";
+import { runMcpSetup } from "./mcp-setup.js";
 
 const program = new Command()
   .name("datadog-connect")
@@ -30,6 +31,14 @@ program
   .option("-s, --session <id>", "セッションID")
   .action(async (opts) => {
     await runRollback({ sessionId: opts.session });
+  });
+
+program
+  .command("mcp")
+  .description("Datadog MCP サーバーを Claude Code に接続")
+  .option("-s, --scope <scope>", "設定範囲 (local/user/project)")
+  .action(async (opts) => {
+    await runMcpSetup({ scope: opts.scope });
   });
 
 program.parse();
