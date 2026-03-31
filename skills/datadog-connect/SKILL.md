@@ -48,10 +48,10 @@ npx datadog-connect setup
 ### 引数なしで呼ばれた場合
 
 ユーザーの意図を確認:
-- 「セットアップしたい」→ `npm run setup`
-- 「前回の続き」→ `npm run resume`
-- 「設定を戻したい」→ `npm run rollback`
-- 「Claude Codeから操作したい」→ `npm run mcp`
+- 「セットアップしたい」→ `npx datadog-connect setup`
+- 「前回の続き」→ `npx datadog-connect resume`
+- 「設定を戻したい」→ `npx datadog-connect rollback`
+- 「Claude Codeから操作したい」→ `npx datadog-connect mcp`
 
 ## 対応モジュール
 
