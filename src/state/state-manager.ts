@@ -30,7 +30,10 @@ export function saveSession(session: SessionState): void {
   writeSecureFile(path, JSON.stringify(session, null, 2));
 }
 
+const SAFE_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 export function loadSession(sessionId: string): SessionState | null {
+  if (!SAFE_SESSION_ID.test(sessionId)) return null;
   const path = join(getStateDir(), `session-${sessionId}.json`);
   if (!existsSync(path)) return null;
   try {

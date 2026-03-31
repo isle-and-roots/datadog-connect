@@ -4,20 +4,17 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
+import { APP_VERSION } from "./config/constants.js";
 import { setupTool, SETUP_TOOL_DEF } from "./mcp-tools/setup-tool.js";
 import { resumeTool, RESUME_TOOL_DEF } from "./mcp-tools/resume-tool.js";
 import { rollbackTool, ROLLBACK_TOOL_DEF } from "./mcp-tools/rollback-tool.js";
 import { statusTool, STATUS_TOOL_DEF } from "./mcp-tools/status-tool.js";
 
 // Redirect console.log to stderr (stdout is reserved for JSON-RPC)
-const origLog = console.log;
-console.log = (...args: unknown[]) => {
-  origLog.apply(console, args); // eslint-disable-line no-console
-};
 console.log = console.error;
 
 const server = new Server(
-  { name: "datadog-connect", version: "0.1.7" },
+  { name: "datadog-connect", version: APP_VERSION },
   { capabilities: { tools: {} } }
 );
 

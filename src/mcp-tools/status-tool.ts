@@ -1,5 +1,6 @@
 import { loadLatestSession, loadSession } from "../state/state-manager.js";
 import { loadJournal } from "../state/operation-journal.js";
+import { mcpSessionArgsSchema } from "../config/schema.js";
 
 export const STATUS_TOOL_DEF = {
   name: "datadog_status",
@@ -16,7 +17,15 @@ export const STATUS_TOOL_DEF = {
 };
 
 export async function statusTool(args: Record<string, unknown>) {
-  const sessionId = args.session_id as string | undefined;
+  const parsed = mcpSessionArgsSchema.safeParse(args);
+  if (!parsed.success) {
+    return {
+      content: [{ type: "text" as const, text: `入力エラー: ${parsed.error.issues.map((i) => i.message).join(", ")}` }],
+      isError: true,
+    };
+  }
+
+  const sessionId = parsed.data.session_id;
   const session = sessionId ? loadSession(sessionId) : loadLatestSession();
 
   if (!session) {

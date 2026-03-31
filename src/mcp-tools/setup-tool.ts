@@ -2,25 +2,11 @@ import { createDatadogClient } from "../client/datadog-client.js";
 import { createSession, saveSession } from "../state/state-manager.js";
 import { createJournal, addResource } from "../state/operation-journal.js";
 import { getModules, resolveOrder } from "../modules/registry.js";
+import { mcpSetupArgsSchema } from "../config/schema.js";
 import type { ResourceRecord, ManualStep, DatadogSite } from "../config/types.js";
 
-// Register all modules (side-effect imports)
-import "../modules/cloud/aws.module.js";
-import "../modules/cloud/gcp.module.js";
-import "../modules/cloud/azure.module.js";
-import "../modules/cloud/on-prem.module.js";
-import "../modules/cloud/kubernetes.module.js";
-import "../modules/cloud/xserver.module.js";
-import "../modules/features/apm.module.js";
-import "../modules/features/logs.module.js";
-import "../modules/features/dashboards.module.js";
-import "../modules/features/monitors.module.js";
-import "../modules/features/synthetics.module.js";
-import "../modules/security/cspm.module.js";
-import "../modules/security/cws.module.js";
-import "../modules/security/asm.module.js";
-import "../modules/security/siem.module.js";
-import "../modules/security/sensitive-data.module.js";
+// Register all 16 modules
+import "../modules/all.js";
 
 const PRESETS: Record<string, string[]> = {
   recommended: ["dashboards", "monitors", "logs"],
@@ -69,6 +55,15 @@ export const SETUP_TOOL_DEF = {
 };
 
 export async function setupTool(args: Record<string, unknown>) {
+  // Input validation
+  const parsed = mcpSetupArgsSchema.safeParse(args);
+  if (!parsed.success) {
+    return {
+      content: [{ type: "text" as const, text: `入力エラー: ${parsed.error.issues.map((i) => i.message).join(", ")}` }],
+      isError: true,
+    };
+  }
+
   const apiKey = process.env.DD_API_KEY;
   const appKey = process.env.DD_APP_KEY;
   if (!apiKey || !appKey) {
@@ -83,9 +78,10 @@ export async function setupTool(args: Record<string, unknown>) {
     };
   }
 
-  const site = (args.site as DatadogSite) ?? process.env.DD_SITE ?? "datadoghq.com";
-  const preset = args.preset as string;
-  const moduleConfigs = (args.module_configs as Record<string, Record<string, unknown>>) ?? {};
+  const validated = parsed.data;
+  const site = validated.site ?? (process.env.DD_SITE as DatadogSite) ?? "datadoghq.com";
+  const preset = validated.preset;
+  const moduleConfigs = validated.module_configs ?? {};
 
   const client = createDatadogClient({ site, apiKey, appKey, profile: "mcp" });
   const session = createSession(site, "mcp");
@@ -96,9 +92,16 @@ export async function setupTool(args: Record<string, unknown>) {
   let moduleIds: string[];
 
   if (preset === "custom") {
-    moduleIds = (args.modules as string[]) ?? [];
+    moduleIds = validated.modules ?? [];
   } else {
-    moduleIds = PRESETS[preset] ?? PRESETS.recommended;
+    const presetModules = PRESETS[preset];
+    if (!presetModules) {
+      return {
+        content: [{ type: "text" as const, text: `エラー: 不明なプリセット "${preset}"` }],
+        isError: true,
+      };
+    }
+    moduleIds = presetModules;
   }
 
   const idSet = new Set(moduleIds);

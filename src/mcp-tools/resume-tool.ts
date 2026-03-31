@@ -2,9 +2,11 @@ import { createDatadogClient } from "../client/datadog-client.js";
 import { loadLatestSession, loadSession, saveSession } from "../state/state-manager.js";
 import { loadJournal, addResource } from "../state/operation-journal.js";
 import { getModules } from "../modules/registry.js";
+import { mcpResumeArgsSchema } from "../config/schema.js";
 import type { DatadogSite } from "../config/types.js";
 
-// Module imports are handled by setup-tool.ts (shared registration)
+// Register all 16 modules
+import "../modules/all.js";
 
 export const RESUME_TOOL_DEF = {
   name: "datadog_resume",
@@ -26,6 +28,14 @@ export const RESUME_TOOL_DEF = {
 };
 
 export async function resumeTool(args: Record<string, unknown>) {
+  const parsed = mcpResumeArgsSchema.safeParse(args);
+  if (!parsed.success) {
+    return {
+      content: [{ type: "text" as const, text: `入力エラー: ${parsed.error.issues.map((i) => i.message).join(", ")}` }],
+      isError: true,
+    };
+  }
+
   const apiKey = process.env.DD_API_KEY;
   const appKey = process.env.DD_APP_KEY;
   if (!apiKey || !appKey) {
@@ -35,7 +45,7 @@ export async function resumeTool(args: Record<string, unknown>) {
     };
   }
 
-  const sessionId = args.session_id as string | undefined;
+  const sessionId = parsed.data.session_id;
   const session = sessionId ? loadSession(sessionId) : loadLatestSession();
 
   if (!session) {
@@ -58,7 +68,7 @@ export async function resumeTool(args: Record<string, unknown>) {
   const site = session.site as DatadogSite;
   const client = createDatadogClient({ site, apiKey, appKey, profile: "mcp" });
   const journal = loadJournal(session.sessionId);
-  const moduleConfigs = (args.module_configs as Record<string, Record<string, unknown>>) ?? {};
+  const moduleConfigs = parsed.data.module_configs ?? {};
 
   const allModules = getModules();
   const results: string[] = [

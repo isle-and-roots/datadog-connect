@@ -31,7 +31,10 @@ export function saveJournal(journal: Journal): void {
   writeSecureFile(getJournalPath(journal.sessionId), JSON.stringify(journal, null, 2));
 }
 
+const SAFE_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 export function loadJournal(sessionId: string): Journal | null {
+  if (!SAFE_SESSION_ID.test(sessionId)) return null;
   const path = getJournalPath(sessionId);
   if (!existsSync(path)) return null;
   try {

@@ -1,8 +1,9 @@
 import { createDatadogClient } from "../client/datadog-client.js";
 import { loadLatestSession, loadSession } from "../state/state-manager.js";
 import { loadJournal } from "../state/operation-journal.js";
-import type { DatadogSite, ResourceRecord } from "../config/types.js";
-import type { DatadogClient } from "../client/datadog-client.js";
+import { deleteResource, SkipError } from "../lib/delete-resource.js";
+import { mcpRollbackArgsSchema } from "../config/schema.js";
+import type { DatadogSite } from "../config/types.js";
 
 export const ROLLBACK_TOOL_DEF = {
   name: "datadog_rollback",
@@ -24,9 +25,10 @@ export const ROLLBACK_TOOL_DEF = {
 };
 
 export async function rollbackTool(args: Record<string, unknown>) {
-  if (args.confirm !== true) {
+  const parsed = mcpRollbackArgsSchema.safeParse(args);
+  if (!parsed.success) {
     return {
-      content: [{ type: "text" as const, text: "ロールバックには confirm: true が必要です。リソースを削除してよいか確認してください。" }],
+      content: [{ type: "text" as const, text: `入力エラー: ${parsed.error.issues.map((i) => i.message).join(", ")}` }],
       isError: true,
     };
   }
@@ -40,7 +42,7 @@ export async function rollbackTool(args: Record<string, unknown>) {
     };
   }
 
-  const sessionId = args.session_id as string | undefined;
+  const sessionId = parsed.data.session_id;
   const session = sessionId ? loadSession(sessionId) : loadLatestSession();
 
   if (!session) {
@@ -72,11 +74,11 @@ export async function rollbackTool(args: Record<string, unknown>) {
       details.push(`✅ 削除: [${resource.type}] ${resource.name}`);
       succeeded++;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("手動削除")) {
-        details.push(`⏭️ スキップ: ${msg}`);
+      if (err instanceof SkipError) {
+        details.push(`⏭️ スキップ: ${err.message}`);
         skipped++;
       } else {
+        const msg = err instanceof Error ? err.message : String(err);
         details.push(`❌ 失敗: [${resource.type}] ${resource.name} — ${msg}`);
         failed++;
       }
@@ -97,40 +99,4 @@ export async function rollbackTool(args: Record<string, unknown>) {
     content: [{ type: "text" as const, text: summary.join("\n") }],
     isError: failed > 0,
   };
-}
-
-async function deleteResource(client: DatadogClient, resource: ResourceRecord): Promise<void> {
-  const { type, id, name } = resource;
-
-  switch (type) {
-    case "monitor":
-      await client.v1.monitors.deleteMonitor({ monitorId: parseInt(id, 10) });
-      break;
-    case "dashboard":
-      await client.v1.dashboards.deleteDashboard({ dashboardId: id });
-      break;
-    case "synthetic_test":
-      await client.v1.synthetics.deleteTests({ body: { publicIds: [id] } });
-      break;
-    case "logs_pipeline":
-      await client.v1.logsPipelines.deleteLogsPipeline({ pipelineId: id });
-      break;
-    case "cws_agent_policy":
-      await client.security.csmThreats.deleteCSMThreatsAgentPolicy({ policyId: id });
-      break;
-    case "asm_waf_rule":
-    case "asm_waf_custom_rule":
-      await client.security.asm.deleteApplicationSecurityWafCustomRule({ customRuleId: id });
-      break;
-    case "asm_waf_exclusion":
-    case "asm_waf_exclusion_filter":
-      await client.security.asm.deleteApplicationSecurityWafExclusionFilter({ exclusionFilterId: id });
-      break;
-    case "security_monitoring_rule":
-    case "siem_rule":
-      await client.security.monitoring.deleteSecurityMonitoringRule({ ruleId: id });
-      break;
-    default:
-      throw new Error(`[${type}] ${name} は手動削除が必要です。Datadog コンソールから削除してください。`);
-  }
 }
