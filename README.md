@@ -157,6 +157,7 @@ npx datadog-connect setup
 
 | 問題 | 解決方法 |
 |------|---------|
+| npx が見つからない | `export PATH="$(find $HOME/.nvm/versions/node -maxdepth 1 -type d 2>/dev/null \| sort -V \| tail -1)/bin:$HOME/.volta/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"` を先に実行 |
 | 認証エラー | API Key と Application Key が正しいか確認。3回まで再入力可 |
 | サイトの選び方 | ログインURLで判別: `app.datadoghq.com` → US1、`ap1.datadoghq.com` → AP1 |
 | 機能がスキップされた | Datadog プランで利用できない機能は自動スキップ |

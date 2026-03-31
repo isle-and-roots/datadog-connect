@@ -1,5 +1,17 @@
 # トラブルシューティング
 
+## npx / node が見つからない
+
+**症状**: `command not found: npx` または `command not found: node`
+
+**対処**: Node.js が PATH に入っていません。以下のコマンドで PATH を自動検出してから実行:
+
+```bash
+export PATH="$(find $HOME/.nvm/versions/node -maxdepth 1 -type d 2>/dev/null | sort -V | tail -1)/bin:$HOME/.volta/bin:/opt/homebrew/bin:/usr/local/bin:$PATH" && npx datadog-connect setup
+```
+
+Node.js 自体がインストールされていない場合: https://nodejs.org/ からダウンロード
+
 ## 認証エラー
 
 **症状**: 「認証失敗」と表示される
@@ -29,14 +41,14 @@ npx playwright install chromium
 
 **対処**:
 ```bash
-npm run resume    # 失敗モジュールだけ再実行
+npx datadog-connect resume    # 失敗モジュールだけ再実行
 ```
 
 ## 設定を元に戻したい
 
 **対処**:
 ```bash
-npm run rollback  # 作成リソースを削除
+npx datadog-connect rollback  # 作成リソースを削除
 ```
 
 一部のリソース（クラウド統合等）は手動削除が必要です。画面に表示される手順に従ってください。
