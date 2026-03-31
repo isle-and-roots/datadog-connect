@@ -38,8 +38,9 @@ program
   .command("mcp")
   .description("Datadog MCP サーバーを Claude Code に接続")
   .option("-s, --scope <scope>", "設定範囲 (local/user/project)")
+  .option("--self", "datadog-connect 自体を MCP サーバーとして登録（自然言語でセットアップ可能に）")
   .action(async (opts) => {
-    await runMcpSetup({ scope: opts.scope });
+    await runMcpSetup({ scope: opts.scope, self: opts.self });
   });
 
 program.parse();

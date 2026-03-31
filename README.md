@@ -123,9 +123,30 @@ Playwright を使って、ログインするだけで各サービスの情報を
 | `npx datadog-connect rollback` | 作成したリソースを削除 |
 | `npx datadog-connect mcp` | Datadog MCP サーバーを Claude Code に接続 |
 
-## Claude Code で使う（MCP接続）
+## Claude Code で使う
 
-Claude Code から Datadog を自然言語で操作できます。1コマンドで接続:
+### セットアップを自然言語で実行（MCP サーバー）
+
+Claude Code に「Datadogをセットアップして」と話しかけるだけでセットアップできます。
+
+```bash
+export DD_API_KEY="あなたのAPIキー"
+export DD_APP_KEY="あなたのApplicationキー"
+npx datadog-connect mcp --self
+```
+
+登録後、Claude Code で:
+
+```
+「Datadogをセットアップして」       → datadog_setup ツール
+「セッションの状態を確認して」       → datadog_status ツール
+「前回の失敗を再実行して」          → datadog_resume ツール
+「作成したリソースを削除して」       → datadog_rollback ツール
+```
+
+### Datadog API を自然言語で操作
+
+既存の Datadog 環境を Claude Code から操作する場合:
 
 ```bash
 export DD_API_KEY="あなたのAPIキー"
@@ -133,13 +154,12 @@ export DD_APP_KEY="あなたのApplicationキー"
 npx datadog-connect mcp
 ```
 
-接続後、Claude Code で:
+接続後:
 
 ```
-「Datadogの直近のアラートを確認して」
+「直近のアラートを確認して」
 「CPU使用率が高いホストを調べて」
 「本番環境のエラーログを検索して」
-「新しいモニターを作成して」
 ```
 
 ## 環境変数
