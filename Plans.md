@@ -13,21 +13,21 @@ Updated: 2026-04-03
 
 ## Phase 1: ナレッジ層の抽出
 
-- [ ] Task 1.1: src/knowledge/ ディレクトリ作成 + monitor-packs.ts（monitors.module.ts から30+モニター定義を純粋データとして抽出）
-- [ ] Task 1.2: dashboard-specs.ts（dashboards.module.ts からウィジェット定義を抽出）
-- [ ] Task 1.3: security-rules.ts（SIEM/CWS/ASM/CSPM/Sensitive Data ルール定義を5つのセキュリティモジュールから抽出）
-- [ ] Task 1.4: cloud-configs.ts（AWS/GCP/Azure/K8s/Xserver/On-Prem 統合設定を6つのクラウドモジュールから抽出）
-- [ ] Task 1.5: presets.ts（wizard.ts + setup-tool.ts に散在するプリセット定義を統合）+ apm-guides.ts（7言語APMガイド抽出）
-- [ ] Task 1.6: 各module.tsからknowledge/へのimport切り替え + typecheck & build 検証
+- [x] Task 1.1: src/knowledge/ ディレクトリ作成 + monitor-packs.ts `cc:done`
+- [x] Task 1.2: dashboard-specs.ts `cc:done`
+- [x] Task 1.3: security-rules.ts `cc:done`
+- [x] Task 1.4: cloud-configs.ts `cc:done`
+- [x] Task 1.5: presets.ts + apm-guides.ts `cc:done`
+- [x] Task 1.6: import切り替え + typecheck & build 検証 `cc:done`
 
 ## Phase 2: オーケストレーション層の構築
 
-- [ ] Task 2.1: src/orchestrator/mcp-call.ts 型定義（McpToolCall, ExecutionPlan, ModulePlan）
-- [ ] Task 2.2: BaseModule インターフェース変更（execute/verify/preflight → plan() メソッド）
-- [ ] Task 2.3: plan-builder.ts（プリセット + モジュール設定 → ExecutionPlan 生成、registry.ts トポロジカルソート活用）
-- [ ] Task 2.4: plan-renderer.ts（ExecutionPlan → Markdown ランブック + JSON 出力）
-- [ ] Task 2.5: rollback-planner.ts（ジャーナル ResourceRecord → 逆順 MCP 呼び出し計画）
-- [ ] Task 2.6: 16モジュール全てに plan() メソッド実装（knowledge/ データを使用）
+- [x] Task 2.1: src/orchestrator/mcp-call.ts 型定義 `cc:done`
+- [x] Task 2.2: BaseModule インターフェース変更 `cc:done`
+- [x] Task 2.3: plan-builder.ts `cc:done`
+- [x] Task 2.4: plan-renderer.ts `cc:done`
+- [x] Task 2.5: rollback-planner.ts `cc:done`
+- [x] Task 2.6: 16モジュール plan() 実装 `cc:done`
 
 ## Phase 3: 直接API層の削除
 
@@ -88,17 +88,27 @@ Updated: 2026-04-03
 
 ## Phase 9: CX最大化 — エラー＆リカバリーUX
 
-- [ ] CX-B1: 構造化エラーヘルパー（src/utils/error-helpers.ts 新規）+ 12箇所の空catchにリカバリーメッセージ
-- [ ] CX-B2: 認証失敗の具体的診断（キー長/文字種の個別指摘 + ブラウザ取得誘導）
-- [ ] CX-B3: resume で全エラー表示 + rollback ドライラン（--dry-run）
+- [x] CX-B1: 構造化エラーヘルパー + 12箇所リカバリーメッセージ `cc:done`
+- [x] CX-B2: 認証失敗の具体的診断 `cc:done`
+- [x] CX-B3: resume 全エラー表示 + rollback --dry-run `cc:done`
 
 ## Phase 10: CX最大化 — プラン出力改善 + スキル強化
 
-- [ ] CX-C1: グローバルステップ番号 + 自動[AUTO]/手動[MANUAL]区別 + expectedOutput
-- [ ] CX-C2: setup/resume に --format json 対応
-- [ ] CX-D1: 全5スキルのトリガーフレーズ拡充 + IaC検出 + スキル間重複ルール強化
+- [x] CX-C1: グローバルステップ番号 + [AUTO]/[MANUAL]区別 + expectedOutput `cc:done`
+- [x] CX-C2: setup/resume に --format json 対応 `cc:done`
+- [x] CX-D1: 全5スキルのトリガーフレーズ拡充 + IaC検出 `cc:done`
 
 ## Phase 11: CX最大化 — アクセシビリティ＆ポリッシュ
 
-- [ ] CX-E1: ASCIIモード（DD_ASCII=1）+ ターミナル幅検出 + 色覚多様性対応
-- [ ] CX-E2: セッション一覧コマンド（datadog-connect sessions）
+- [x] CX-E1: ASCIIモード + ターミナル幅検出 + 色覚多様性対応 `cc:done`
+- [x] CX-E2: セッション一覧コマンド `cc:done`
+
+## Phase 12: 監査v2修正
+
+- [x] I-C1: SIEM パックID "AUTH_PACK" → "auth" `cc:done`
+- [x] M3: DD_API_KEY/DD_APP_KEY .trim() 追加 `cc:done`
+- [x] I-C2: SessionSummary.preset → profile リネーム `cc:done`
+- [x] S-H1: preflight エラーからキー長除去 `cc:done`
+- [x] S-H2: logDebugError stack trace 除去 `cc:done`
+- [x] M2: sessions --limit NaN ガード `cc:done`
+- [x] I-M1: MODULE_CONSOLE_URLS 全16モジュール完備 `cc:done`

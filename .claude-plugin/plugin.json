@@ -2,5 +2,5 @@
   "name": "datadog-connect",
   "description": "Datadog MCP ハーネス — 公式 Datadog MCP と連携して監視環境のセットアップ・運用・最適化を支援する Claude Code プラグイン",
   "version": "1.0.0",
-  "keywords": ["datadog", "monitoring", "setup", "security", "observability"]
+  "keywords": ["datadog", "monitoring", "setup", "security", "observability", "mcp-harness", "claude-code-plugin", "harness"]
 }

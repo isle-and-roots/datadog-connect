@@ -828,12 +828,12 @@
   <div class="hero-glow"></div>
   <div class="hero-content">
     <div class="hero-badge">
-      <span>v0.2.1</span>
+      <span>v1.0.0</span>
       <span style="color:#4A5568">|</span>
       <span>Node.js v20+</span>
     </div>
     <h1 class="hero-title">Datadog<br>Connect</h1>
-    <p class="hero-sub">1コマンドで、Datadogを完全セットアップ。<br>対話形式のウィザードが最適な設定を自動構築します。</p>
+    <p class="hero-sub">AIに話しかけるだけで、Datadogの監視設定が完了。<br>公式Datadog MCPと連携するハーネスツールです。</p>
     <a href="#setup" class="btn-primary">
       <span>始める</span>
       <span>↓</span>
@@ -853,8 +853,8 @@
         <div class="stat-label">クラウド対応</div>
       </div>
       <div class="stat">
-        <div class="stat-num">1</div>
-        <div class="stat-label">コマンド</div>
+        <div class="stat-num">5</div>
+        <div class="stat-label">AIスキル</div>
       </div>
     </div>
   </div>
@@ -864,14 +864,14 @@
 <section id="features">
   <div class="container">
     <div class="section-label">できること</div>
-    <h2 class="section-title">Datadogの全機能を<br>ワンストップで設定</h2>
-    <p class="section-desc">クラウド統合から監視設定、セキュリティまで。複雑な設定作業をウィザードが自動化します。</p>
+    <h2 class="section-title">AIが監視設定を<br>まるごとサポート</h2>
+    <p class="section-desc">セットアップから障害対応、コスト最適化まで。AIに話しかけるだけで監視環境を構築・運用できます。</p>
 
     <div class="features-grid">
       <div class="feature-card">
         <div class="feature-icon">☁️</div>
         <h3 class="feature-title">クラウド統合</h3>
-        <p class="feature-desc">主要クラウドプロバイダーとの統合を自動設定。IAMロールやサービスアカウントの作成手順書も自動生成します。</p>
+        <p class="feature-desc">主要クラウドプロバイダーとの連携プランを自動生成。IAMロールやサービスアカウントの作成手順書も出力します。</p>
         <div class="feature-tags">
           <span class="tag">AWS</span>
           <span class="tag">GCP</span>
@@ -885,7 +885,7 @@
       <div class="feature-card">
         <div class="feature-icon">📊</div>
         <h3 class="feature-title">監視機能</h3>
-        <p class="feature-desc">APMによるアプリケーション性能監視から、ログ収集、ダッシュボード、アラート設定まで。最適なプリセットを即座に適用します。</p>
+        <p class="feature-desc">APMによるアプリケーション性能監視から、ログ収集、ダッシュボード、アラート設定まで。最適なプランを自動で組み立てます。</p>
         <div class="feature-tags">
           <span class="tag">APM</span>
           <span class="tag">ログ管理</span>
@@ -915,8 +915,8 @@
 <section id="setup">
   <div class="container">
     <div class="section-label">セットアップ手順</div>
-    <h2 class="section-title">5ステップで<br>完全セットアップ</h2>
-    <p class="section-desc">コマンドを実行して、画面の指示に従うだけ。難しい設定は一切不要です。</p>
+    <h2 class="section-title">3ステップで<br>かんたんスタート</h2>
+    <p class="section-desc">APIキーを用意して、1コマンド実行するだけ。あとはAIに話しかけてください。</p>
 
     <div class="timeline">
 
@@ -925,11 +925,8 @@
         <div class="step-num">1</div>
         <h3 class="step-title">準備</h3>
         <p class="step-desc">
-          まず <strong>Node.js（v20以上）</strong> をインストールします。
-          <a href="https://nodejs.org/" target="_blank" rel="noopener">nodejs.org</a> からダウンロードできます。<br>
-          インストール後、ターミナルで <code style="background:rgba(99,44,166,0.2);padding:2px 8px;border-radius:5px;font-size:0.85rem;color:#B794F4">node -v</code> と入力して <code style="background:rgba(99,44,166,0.2);padding:2px 8px;border-radius:5px;font-size:0.85rem;color:#B794F4">v20.x.x</code> 以上が表示されればOKです。
+          Datadog にログインして <strong>Organization Settings → API Keys</strong> から API Key と Application Key を取得します。
         </p>
-        <p class="step-desc">次に、ツールをダウンロードします。</p>
         <div class="code-block">
           <div class="code-header">
             <span class="code-dot r"></span>
@@ -938,18 +935,18 @@
             <span class="code-title">ターミナル</span>
           </div>
           <div class="code-body">
-            <code><span class="cmd">git clone</span> https://github.com/isle-and-roots/datadog-connect.git
-<span class="cmd">cd</span> datadog-connect
-<span class="cmd">npm install</span></code>
+            <code><span class="cmd">export DD_API_KEY=</span>"ここにAPIキーを貼り付け"
+<span class="cmd">export DD_APP_KEY=</span>"ここにApplicationキーを貼り付け"</code>
           </div>
         </div>
+        <p class="step-desc" style="margin-top:0.5rem">日本リージョンの方は <code style="background:rgba(99,44,166,0.2);padding:2px 8px;border-radius:5px;font-size:0.85rem;color:#B794F4">export DD_SITE="ap1.datadoghq.com"</code> も追加してください。</p>
       </div>
 
       <!-- Step 2 -->
       <div class="step">
         <div class="step-num">2</div>
-        <h3 class="step-title">セットアップ開始</h3>
-        <p class="step-desc">以下のコマンドを実行すると、対話形式のウィザードが起動します。</p>
+        <h3 class="step-title">ツールを接続</h3>
+        <p class="step-desc">以下のコマンドで Claude Code と Datadog を接続します。</p>
         <div class="code-block">
           <div class="code-header">
             <span class="code-dot r"></span>
@@ -958,10 +955,10 @@
             <span class="code-title">ターミナル</span>
           </div>
           <div class="code-body">
-            <code><span class="cmd">npx datadog-connect setup</span></code>
+            <code><span class="cmd">npx datadog-connect mcp</span></code>
           </div>
         </div>
-        <p class="step-desc" style="margin-top:0.5rem">起動すると、最初に認証方法を選択します。<strong>ブラウザで自動取得</strong>がおすすめです。認証に失敗しても3回まで再入力可能。API Key の確認方法も案内されます。</p>
+        <p class="step-desc" style="margin-top:0.5rem">これだけで Claude Code と Datadog が繋がります。あとは Claude Code で日本語で話しかけるだけ。</p>
         <div class="terminal">
           <div class="terminal-header">
             <span class="dot red"></span>
@@ -970,14 +967,14 @@
             <span class="terminal-title">datadog-connect</span>
           </div>
           <div class="terminal-body">
-            <pre><code><span class="dim">$ npx datadog-connect setup</span>
+            <pre><code><span class="dim">$ npx datadog-connect mcp</span>
 
-<span class="cyan">🐕 Datadog Connect — かんたんセットアップ</span>
+<span class="cyan">🐕 Datadog Connect — MCP接続</span>
 
-  <span class="white bold">Step 1: 認証</span>
-  <span class="dim">? 認証情報の取得方法:</span>
-    <span class="cyan">❯ 🌐 ブラウザで自動取得（おすすめ）</span>
-      <span class="dim">⌨️  手動入力</span>
+  <span class="green">✓</span> 公式 Datadog MCP サーバーを登録しました
+  <span class="green">✓</span> Claude Code から Datadog を操作できます
+
+  <span class="dim">Claude Code で「Datadogをセットアップして」と話しかけてください</span>
 </code></pre>
           </div>
         </div>
@@ -986,14 +983,19 @@
       <!-- Step 3 -->
       <div class="step">
         <div class="step-num">3</div>
-        <h3 class="step-title">セットアップタイプを選ぶ</h3>
-        <p class="step-desc">用途に合わせて6つのプリセットから選択します。迷ったら「おすすめセット」を選んでください。</p>
+        <h3 class="step-title">AIに話しかける</h3>
+        <p class="step-desc">Claude Code を開いて日本語で指示するだけ。プリセットから選ぶこともできます。</p>
 
         <div class="presets-grid">
           <div class="preset-card">
+            <div class="preset-icon">⚡</div>
+            <div class="preset-name">クイックスタート</div>
+            <div class="preset-desc">モニター＋ダッシュボードだけ。5分で完了。初めての方におすすめ。</div>
+          </div>
+          <div class="preset-card">
             <div class="preset-icon">⭐</div>
             <div class="preset-name">おすすめセット</div>
-            <div class="preset-desc">ダッシュボード・モニター・APMの基本セット。まずはここから。</div>
+            <div class="preset-desc">ダッシュボード・モニター・APMの基本セット。</div>
           </div>
           <div class="preset-card">
             <div class="preset-icon">☁️</div>
@@ -1031,8 +1033,8 @@
       <!-- Step 4 -->
       <div class="step">
         <div class="step-num">4</div>
-        <h3 class="step-title">自動設定</h3>
-        <p class="step-desc">あとは画面の質問に答えるだけ！設定はすべて自動で行われます。進捗がリアルタイムで表示されます。</p>
+        <h3 class="step-title">プランの確認</h3>
+        <p class="step-desc">AIが環境を分析して、最適な設定プランを生成します。プランはMarkdownまたはJSON形式で出力されます。</p>
 
         <div class="terminal">
           <div class="terminal-header">
@@ -1127,19 +1129,27 @@
       <tbody>
         <tr>
           <td><code>npx datadog-connect setup</code></td>
-          <td>セットアップウィザードを起動します。初回はここから。</td>
+          <td>対話形式でセットアッププランを生成します。</td>
+        </tr>
+        <tr>
+          <td><code>npx datadog-connect plan</code></td>
+          <td>プリセットを指定して設定プランを直接出力。<code>--preset minimal</code> で5分クイックスタート。</td>
         </tr>
         <tr>
           <td><code>npx datadog-connect resume</code></td>
-          <td>前回途中で止まったセットアップを、失敗した箇所から再開します。</td>
+          <td>前回途中で止まったセットアップを再開します。</td>
         </tr>
         <tr>
           <td><code>npx datadog-connect rollback</code></td>
-          <td>作成したリソースをまとめて削除します。やり直したいときに使用。</td>
+          <td>作成した設定を元に戻します。<code>--dry-run</code> でプレビューのみも可能。</td>
         </tr>
         <tr>
           <td><code>npx datadog-connect mcp</code></td>
-          <td>Claude Code と Datadog を接続して、AI経由でDatadogを操作できるようにします。</td>
+          <td>Claude Code と Datadog を接続。AIで自然言語操作が可能に。</td>
+        </tr>
+        <tr>
+          <td><code>npx datadog-connect sessions</code></td>
+          <td>過去のセッション一覧を表示。</td>
         </tr>
       </tbody>
     </table>
@@ -1158,9 +1168,9 @@
 <section id="plugin" class="section">
   <div class="container">
     <div class="section-label">Claude Code 連携</div>
-    <h2 class="section-title">Claude Code で使う（MCP接続）</h2>
+    <h2 class="section-title">AIスキルで使いこなす</h2>
     <p style="text-align: center; color: var(--text-secondary); margin-bottom: 2rem;">
-      MCP サーバーを接続して、Claude Code から Datadog を自然言語で操作できます。
+      5つの専用スキルで、セットアップから障害対応、コスト最適化まで対応。
     </p>
     <div class="code-block" style="max-width:600px;margin:0 auto 2rem;">
       <div class="code-header">
@@ -1175,19 +1185,24 @@
     </div>
     <div class="features-grid">
       <div class="feature-card">
-        <div class="feature-icon">💬</div>
-        <h3>自然言語で操作</h3>
-        <p>「直近のアラートを確認して」「CPU使用率が高いホストを調べて」と話しかけるだけでDatadogが動作します。</p>
+        <div class="feature-icon">🚀</div>
+        <h3>dd-setup</h3>
+        <p>環境を自動検出して、最適なセットアッププランを生成。「Datadogをセットアップして」で起動。</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon">⚡</div>
-        <h3>1コマンド接続</h3>
-        <p><code>npx datadog-connect mcp</code> で MCP サーバーを Claude Code に自動登録。すぐに使えます。</p>
+        <div class="feature-icon">📊</div>
+        <h3>dd-bestpractice</h3>
+        <p>あなたのスタックに合った監視のベストプラクティスを提案。「おすすめのモニター設定を教えて」</p>
       </div>
       <div class="feature-card">
-        <div class="feature-icon">🔧</div>
-        <h3>CLIスタンドアロン</h3>
-        <p><code>npx datadog-connect setup</code> で Claude Code なしでも動作。顧客デモに最適。</p>
+        <div class="feature-icon">🚨</div>
+        <h3>dd-incident</h3>
+        <p>障害発生時の調査プレイブック。「本番でエラーが出てるから調べて」で自動トリアージ。</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔍</div>
+        <h3>dd-audit</h3>
+        <p>監視カバレッジ・ノイズ・コストを分析。「アラートが多すぎるから最適化して」</p>
       </div>
     </div>
   </div>
