@@ -122,21 +122,21 @@ export async function runMcpSetup(opts: McpSetupOptions): Promise<void> {
   startSpinner("@winor30/mcp-server-datadog をインストール中...");
 
   try {
-    // env オプションで認証情報を渡し、プロセスリスト(ps aux)への露出を防ぐ
+    // spawnSync の args 配列経由で渡す（シェル履歴には残らない）
+    // claude mcp add <name> [options] -- <command> の順序で指定
     const args = [
       "mcp", "add",
-      "-s", scope,
-      "-e", "DD_API_KEY",
-      "-e", "DD_APP_KEY",
-      "-e", "DD_SITE",
       "datadog",
+      "-s", scope,
+      "-e", `DD_API_KEY=${apiKey}`,
+      "-e", `DD_APP_KEY=${appKey}`,
+      "-e", `DD_SITE=${site}`,
       "--",
       "npx", "-y", "@winor30/mcp-server-datadog",
     ];
 
     const result = spawnSync("claude", args, {
       stdio: "pipe",
-      env: { ...process.env, DD_API_KEY: apiKey, DD_APP_KEY: appKey, DD_SITE: site },
     });
     if (result.status !== 0) {
       throw new Error(result.stderr?.toString() || "claude mcp add failed");
