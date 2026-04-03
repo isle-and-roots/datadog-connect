@@ -3,6 +3,7 @@ import { BaseModule } from "../base-module.js";
 import { registerModule } from "../registry.js";
 import { RESOURCE_PREFIX } from "../../config/constants.js";
 import { printSuccess } from "../../utils/prompts.js";
+import { logDebugError } from "../../utils/error-helpers.js";
 import {
   promptNotification,
   formatNotificationHandle,
@@ -36,7 +37,8 @@ class SiemModule extends BaseModule {
         pageSize: 1,
       });
       return { available: true };
-    } catch {
+    } catch (err) {
+      logDebugError("SIEM preflight", err);
       return {
         available: false,
         reason: "SIEM (Security Monitoring) はPro以上のプランが必要です",

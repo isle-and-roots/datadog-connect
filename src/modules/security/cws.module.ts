@@ -3,6 +3,7 @@ import { BaseModule } from "../base-module.js";
 import { registerModule } from "../registry.js";
 import { RESOURCE_PREFIX } from "../../config/constants.js";
 import { printSuccess, printManual, printInfo } from "../../utils/prompts.js";
+import { logDebugError } from "../../utils/error-helpers.js";
 import { writeSecureFile, getSecureOutputDir } from "../../utils/secure-write.js";
 import { join } from "node:path";
 import {
@@ -40,7 +41,8 @@ class CwsModule extends BaseModule {
     try {
       await (client as any).security.csmThreats.listCSMThreatsAgentPolicies();
       return { available: true };
-    } catch {
+    } catch (err) {
+      logDebugError("CWS preflight", err);
       return {
         available: false,
         reason: "CWSはEnterprise以上のプランが必要です",

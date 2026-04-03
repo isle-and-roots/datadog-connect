@@ -10,6 +10,7 @@
 
 /** All supported preset identifiers. */
 export type PresetId =
+  | "minimal"
   | "recommended"
   | "aws"
   | "gcp"
@@ -80,6 +81,12 @@ export const ALL_MODULE_IDS: string[] = [
  */
 export const PRESET_META: PresetMeta[] = [
   {
+    id: "minimal",
+    label: "クイックスタート",
+    description: "モニター + ダッシュボード（5分で完了）",
+    isCustom: false,
+  },
+  {
     id: "recommended",
     label: "おすすめセット",
     description: "ダッシュボード + モニター + ログ（まず試したい方に）",
@@ -139,6 +146,7 @@ export const PRESET_META: PresetMeta[] = [
  * their PRESETS record from here.
  */
 export const PRESET_MODULE_MAP: Record<Exclude<PresetId, "custom" | "full">, string[]> = {
+  minimal: ["monitors", "dashboards"],
   recommended: ["dashboards", "monitors", "logs"],
   aws: ["aws", "dashboards", "monitors", "apm", "logs"],
   gcp: ["gcp", "dashboards", "monitors", "apm", "logs"],

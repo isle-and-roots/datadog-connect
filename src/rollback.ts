@@ -17,10 +17,13 @@ import { randomUUID } from "node:crypto";
 
 export interface RollbackOptions {
   sessionId?: string;
+  dryRun?: boolean;
 }
 
 export async function runRollback(opts: RollbackOptions): Promise<void> {
   printBanner();
+
+  const dryRun = opts.dryRun ?? false;
 
   // セッション解決
   const session = opts.sessionId
@@ -58,6 +61,37 @@ export async function runRollback(opts: RollbackOptions): Promise<void> {
     console.log(`    • [${r.type}] ${r.name} (${r.id})`);
   }
   console.log();
+
+  if (dryRun) {
+    // Dry-run: show resources and rollback plan preview without executing
+    const rollbackCalls = buildRollbackPlan(resources);
+
+    const plan: ExecutionPlan = {
+      sessionId: randomUUID(),
+      site: session.site,
+      preset: "rollback",
+      createdAt: new Date().toISOString(),
+      modules: [
+        {
+          moduleId: "rollback",
+          moduleName: "Rollback",
+          category: "cloud",
+          calls: rollbackCalls,
+          manualSteps: [],
+          verificationCalls: [],
+        },
+      ],
+      totalCalls: rollbackCalls.length,
+    };
+
+    const markdown = renderPlanAsMarkdown(plan);
+    console.log();
+    console.log(markdown);
+    console.log();
+    printInfo("[DRY RUN] 実際の削除は行いません");
+    printInfo(`合計 ${rollbackCalls.length} 件の削除操作がプレビューされました。`);
+    return;
+  }
 
   const ok = await confirm({
     message: "上記のリソースのロールバックプランを生成しますか？",

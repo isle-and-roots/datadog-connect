@@ -6,10 +6,68 @@ import { randomUUID } from "node:crypto";
 import { STATE_DIR } from "../config/constants.js";
 import type { SessionState, DatadogSite } from "../config/types.js";
 
-function getStateDir(): string {
+export function getStateDir(): string {
   const dir = join(homedir(), STATE_DIR, "state");
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 });
   return dir;
+}
+
+// ── Session Summary ───────────────────────────────────────────────────────────
+
+export interface SessionSummary {
+  sessionId: string;
+  shortId: string;
+  createdAt: string;
+  site: string;
+  preset: string;
+  moduleCount: number;
+  status: "completed" | "partial" | "pending";
+}
+
+/**
+ * List sessions sorted by modification time (newest first).
+ */
+export function listSessions(limit = 10): SessionSummary[] {
+  const dir = getStateDir();
+  if (!existsSync(dir)) return [];
+
+  const files = readdirSync(dir)
+    .filter((f) => f.startsWith("session-") && f.endsWith(".json"))
+    .sort((a, b) => {
+      const aTime = statSync(join(dir, a)).mtimeMs;
+      const bTime = statSync(join(dir, b)).mtimeMs;
+      return bTime - aTime;
+    })
+    .slice(0, limit);
+
+  const summaries: SessionSummary[] = [];
+  for (const file of files) {
+    try {
+      const session = JSON.parse(readFileSync(join(dir, file), "utf-8")) as SessionState;
+      const moduleEntries = Object.entries(session.modules);
+      const moduleCount = moduleEntries.length;
+      const allCompleted = moduleEntries.length > 0 && moduleEntries.every(([, m]) => m.state === "completed");
+      const anyCompleted = moduleEntries.some(([, m]) => m.state === "completed");
+      const status: SessionSummary["status"] = allCompleted
+        ? "completed"
+        : anyCompleted
+        ? "partial"
+        : "pending";
+
+      summaries.push({
+        sessionId: session.sessionId,
+        shortId: session.sessionId.slice(0, 8),
+        createdAt: session.startedAt,
+        site: session.site,
+        preset: session.profile,
+        moduleCount,
+        status,
+      });
+    } catch {
+      // skip unreadable session files
+    }
+  }
+  return summaries;
 }
 
 export function createSession(site: DatadogSite, profile: string): SessionState {

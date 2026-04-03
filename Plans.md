@@ -77,3 +77,28 @@ Updated: 2026-04-03
 - [x] Fix S7: cloud-configs.ts の YAML タグにクォート追加 `cc:done`
 - [x] Fix P1: モジュール登録を all.ts に統一（B6 と統合） `cc:done`
 - [x] Fix S13: plan.ts の --output に writeSecureFile を使用 `cc:done`
+
+---
+
+## Phase 8: CX最大化 — クイックウィンパス
+
+- [x] CX-A1: "minimal" プリセット追加（monitors + dashboards のみ、5分で完了） `cc:done`
+- [x] CX-A2: プリフライト検証（src/utils/preflight.ts 新規作成、wizard/mcp-setup から呼出） `cc:done`
+- [x] CX-A3: セットアップ完了サマリー（Datadog管理画面URL付き確認チェックリスト） `cc:done`
+
+## Phase 9: CX最大化 — エラー＆リカバリーUX
+
+- [ ] CX-B1: 構造化エラーヘルパー（src/utils/error-helpers.ts 新規）+ 12箇所の空catchにリカバリーメッセージ
+- [ ] CX-B2: 認証失敗の具体的診断（キー長/文字種の個別指摘 + ブラウザ取得誘導）
+- [ ] CX-B3: resume で全エラー表示 + rollback ドライラン（--dry-run）
+
+## Phase 10: CX最大化 — プラン出力改善 + スキル強化
+
+- [ ] CX-C1: グローバルステップ番号 + 自動[AUTO]/手動[MANUAL]区別 + expectedOutput
+- [ ] CX-C2: setup/resume に --format json 対応
+- [ ] CX-D1: 全5スキルのトリガーフレーズ拡充 + IaC検出 + スキル間重複ルール強化
+
+## Phase 11: CX最大化 — アクセシビリティ＆ポリッシュ
+
+- [ ] CX-E1: ASCIIモード（DD_ASCII=1）+ ターミナル幅検出 + 色覚多様性対応
+- [ ] CX-E2: セッション一覧コマンド（datadog-connect sessions）

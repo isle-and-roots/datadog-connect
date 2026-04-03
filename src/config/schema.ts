@@ -22,7 +22,7 @@ export const awsAccountIdSchema = z
 export const SAFE_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export const mcpSetupArgsSchema = z.object({
-  preset: z.enum(["recommended", "aws", "gcp", "security", "xserver", "full", "custom"]),
+  preset: z.enum(["minimal", "recommended", "aws", "gcp", "azure", "security", "xserver", "full", "custom"]),
   modules: z.array(z.string()).optional(),
   module_configs: z.record(z.record(z.unknown())).optional(),
   site: credentialsSchema.shape.site.optional(),

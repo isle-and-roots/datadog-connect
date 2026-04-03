@@ -1,6 +1,6 @@
 ---
 name: datadog-connect
-description: "Datadog MCP と連携して監視環境のセットアップ・運用・最適化を支援するハーネス。Use when user mentions Datadog setup, Datadog monitoring, Datadog configure, Datadog integration, monitoring setup, observability setup, harness, MCP setup, AWS/GCP/Azure monitoring, Xserver monitoring, CSPM, WAF, SIEM setup, incident investigation, monitoring best practices, audit monitoring. Trigger: 'Datadogをセットアップ', 'Datadog設定して', 'monitoring設定', 'Datadog connect', 'Datadog harness', 'MCP連携', '監視のベストプラクティス', '障害調査', 'Datadog監査'. Do NOT load for: checking alerts, viewing dashboards (use Datadog MCP directly), existing monitoring data queries."
+description: "Datadog MCP と連携して監視環境のセットアップ・運用・最適化を支援するハーネス。Use when user mentions Datadog setup, Datadog monitoring, Datadog configure, Datadog integration, monitoring setup, observability setup, harness, MCP setup, AWS/GCP/Azure monitoring, Xserver monitoring, CSPM, WAF, SIEM setup, incident investigation, monitoring best practices, audit monitoring. Trigger: 'Datadogをセットアップ', 'Datadog設定して', 'monitoring設定', 'Datadog connect', 'Datadog harness', 'MCP連携', '監視のベストプラクティス', '障害調査', 'Datadog監査', 'Datadog使い方', 'monitoring overview', 'Datadogヘルプ'. Do NOT load for: checking alerts, viewing dashboards (use Datadog MCP directly), existing monitoring data queries."
 description-ja: "Datadog MCP と連携した監視環境のセットアップ・運用・最適化ハーネス。16モジュール対応（Cloud 6/Feature 5/Security 5）、ガイド付きセットアップ、ベストプラクティス適用、インシデント対応、監査・最適化を統合提供。"
 allowed-tools: ["Bash", "Read", "Write", "Edit"]
 argument-hint: "[setup|plan|bestpractice|incident|audit]"

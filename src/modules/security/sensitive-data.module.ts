@@ -3,6 +3,7 @@ import { BaseModule } from "../base-module.js";
 import { registerModule } from "../registry.js";
 import { RESOURCE_PREFIX } from "../../config/constants.js";
 import { printSuccess } from "../../utils/prompts.js";
+import { logDebugError } from "../../utils/error-helpers.js";
 import {
   SENSITIVE_DATA_PATTERNS,
   SENSITIVE_DATA_ACTIONS,
@@ -40,7 +41,8 @@ class SensitiveDataModule extends BaseModule {
     try {
       await (client as any).security.sensitiveData.listScanningGroups();
       return { available: true };
-    } catch {
+    } catch (err) {
+      logDebugError("Sensitive Data Scanner preflight", err);
       return {
         available: false,
         reason:

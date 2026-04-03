@@ -5,6 +5,7 @@ import { runResume } from "./resume.js";
 import { runRollback } from "./rollback.js";
 import { runMcpSetup } from "./mcp-setup.js";
 import { runPlan } from "./plan.js";
+import { runSessions } from "./sessions.js";
 
 const program = new Command()
   .name("datadog-connect")
@@ -15,8 +16,9 @@ program
   .command("setup")
   .description("Datadogセットアップウィザードを開始（MCP実行プランを生成）")
   .option("-p, --profile <name>", "認証プロファイル名", "default")
+  .option("--format <fmt>", "出力形式 (markdown, json)", "markdown")
   .action(async (opts) => {
-    await runSetup({ profile: opts.profile });
+    await runSetup({ profile: opts.profile, format: opts.format });
   });
 
 program
@@ -34,16 +36,18 @@ program
   .command("resume")
   .description("中断したセッションのプランを再生成")
   .option("-s, --session <id>", "セッションID")
+  .option("--format <fmt>", "出力形式 (markdown, json)", "markdown")
   .action(async (opts) => {
-    await runResume({ sessionId: opts.session });
+    await runResume({ sessionId: opts.session, format: opts.format });
   });
 
 program
   .command("rollback")
   .description("作成リソースのロールバックプランを生成")
   .option("-s, --session <id>", "セッションID")
+  .option("--dry-run", "削除対象のプレビューのみ（実行しない）")
   .action(async (opts) => {
-    await runRollback({ sessionId: opts.session });
+    await runRollback({ sessionId: opts.session, dryRun: opts.dryRun });
   });
 
 program
@@ -52,6 +56,14 @@ program
   .option("-s, --scope <scope>", "設定範囲 (local/user/project)")
   .action(async (opts) => {
     await runMcpSetup({ scope: opts.scope });
+  });
+
+program
+  .command("sessions")
+  .description("セッション一覧を表示")
+  .option("-n, --limit <n>", "表示件数", "10")
+  .action(async (opts) => {
+    await runSessions({ limit: parseInt(opts.limit, 10) });
   });
 
 program.parse();

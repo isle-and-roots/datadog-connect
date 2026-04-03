@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import { printBanner, printStep, printSuccess, printError, printInfo } from "./utils/prompts.js";
 import { startSpinner, succeedSpinner, failSpinner } from "./utils/spinner.js";
+import { runPreflight, printPreflightResult, hasApiKeyFormatError } from "./utils/preflight.js";
 
 interface McpSetupOptions {
   scope?: "local" | "user" | "project";
@@ -12,6 +13,20 @@ interface McpSetupOptions {
 
 export async function runMcpSetup(opts: McpSetupOptions): Promise<void> {
   printBanner();
+
+  // Pre-flight checks
+  const preflightResult = runPreflight();
+  if (preflightResult.checks.length > 0) {
+    printPreflightResult(preflightResult);
+    if (hasApiKeyFormatError(preflightResult)) {
+      printError(
+        "APIキーのフォーマットが正しくありません。環境変数を確認してから再実行してください。"
+      );
+      printInfo("  export DD_API_KEY=\"32文字の16進数\"");
+      printInfo("  export DD_APP_KEY=\"40文字の16進数\"");
+      return;
+    }
+  }
 
   printStep(1, "Datadog MCP サーバーセットアップ");
 

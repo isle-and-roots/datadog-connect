@@ -1,6 +1,6 @@
 ---
 name: dd-audit
-description: "Audit and optimization skill for Datadog monitoring. Use when user wants to review monitoring coverage, reduce alert noise, optimize costs, or audit their Datadog setup. Triggers: 'Datadog監査', 'optimize monitoring', 'reduce noise', 'コスト削減', 'アラートが多すぎる', 'monitoring coverage', '監視の見直し', 'Datadog費用'. Do NOT load for: initial setup tasks, incident investigation, best practices consultation."
+description: "Audit and optimization skill for Datadog monitoring. Use when user wants to review monitoring coverage, reduce alert noise, optimize costs, or audit their Datadog setup. Triggers: 'Datadog監査', 'optimize monitoring', 'reduce noise', 'コスト削減', 'アラートが多すぎる', 'monitoring coverage', '監視の見直し', 'Datadog費用', 'Datadog料金', '月額いくら', 'unused monitors', '不要なモニター', 'cost too high', 'billing'. Do NOT load for: initial setup tasks, incident investigation, best practices consultation, new monitoring recommendations (use dd-bestpractice), fresh setup (use dd-setup)."
 description-ja: "Datadog 監視の監査・最適化スキル。インベントリ → カバレッジ分析 → ノイズ分析 → コスト分析 → 最適化レポートを提供。"
 allowed-tools: ["Bash", "Read", "Write", "Edit"]
 argument-hint: "[focus: coverage|noise|cost|all]"

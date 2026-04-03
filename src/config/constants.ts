@@ -20,6 +20,18 @@ export const SITE_API_BASE: Record<DatadogSite, string> = {
 
 export const RESOURCE_PREFIX = "[DDConnect]";
 
+/** Datadog console URL paths per module, relative to https://app.datadoghq.com */
+export const MODULE_CONSOLE_URLS: Record<string, string> = {
+  monitors: "/monitors/manage",
+  dashboards: "/dashboard/lists",
+  apm: "/apm/services",
+  logs: "/logs/pipelines",
+  synthetics: "/synthetics/tests",
+  aws: "/integrations/amazon-web-services",
+  gcp: "/integrations/google-cloud-platform",
+  azure: "/integrations/azure",
+};
+
 export const STATE_DIR = ".datadog-connect";
 
 export const APP_NAME = "Datadog Connect";

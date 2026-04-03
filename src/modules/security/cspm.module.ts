@@ -3,6 +3,7 @@ import { BaseModule } from "../base-module.js";
 import { registerModule } from "../registry.js";
 import { RESOURCE_PREFIX } from "../../config/constants.js";
 import { printSuccess } from "../../utils/prompts.js";
+import { logDebugError } from "../../utils/error-helpers.js";
 import {
   validateAwsAccountId,
   validateGcpProjectId,
@@ -46,7 +47,8 @@ class CspmModule extends BaseModule {
     try {
       await (client as any).security.csmCoverage.getCSMCloudAccountsCoverageAnalysis();
       return { available: true };
-    } catch {
+    } catch (err) {
+      logDebugError("CSPM preflight", err);
       return { available: false, reason: "CSPMはEnterprise以上のプランが必要です" };
     }
   }

@@ -4,7 +4,7 @@ import { loadLatestSession, loadSession } from "./state/state-manager.js";
 import { getModules } from "./modules/registry.js";
 import { printBanner, printStep, printSuccess, printError, printInfo } from "./utils/prompts.js";
 import { buildExecutionPlanFromIds } from "./orchestrator/plan-builder.js";
-import { renderPlanAsMarkdown } from "./orchestrator/plan-renderer.js";
+import { renderPlanAsMarkdown, renderPlanAsJson } from "./orchestrator/plan-renderer.js";
 import { getSecureOutputDir, writeSecureFile } from "./utils/secure-write.js";
 import { join } from "node:path";
 
@@ -13,6 +13,7 @@ import "./modules/all.js";
 
 interface ResumeOptions {
   sessionId?: string;
+  format?: string;
 }
 
 export async function runResume(opts: ResumeOptions): Promise<void> {
@@ -49,8 +50,10 @@ export async function runResume(opts: ResumeOptions): Promise<void> {
 
   printError(`未完了: ${failedModuleEntries.length}モジュール`);
   for (const mod of failedModuleEntries) {
-    const errSuffix = mod.errors.length > 0 ? `: ${mod.errors[0]}` : "";
-    printInfo(`  - ${mod.id} (${mod.state})${errSuffix}`);
+    printError(`  ${mod.id} (${mod.state})`);
+    for (const err of mod.errors) {
+      printInfo(`    - ${err}`);
+    }
   }
 
   const shouldResume = await confirm({
@@ -89,15 +92,17 @@ export async function runResume(opts: ResumeOptions): Promise<void> {
     return;
   }
 
-  const markdown = renderPlanAsMarkdown(plan);
+  const useJson = opts.format === "json";
+  const output = useJson ? renderPlanAsJson(plan) : renderPlanAsMarkdown(plan);
+  const ext = useJson ? "json" : "md";
 
   // 出力先に保存
   const outputDir = getSecureOutputDir();
-  const reportPath = join(outputDir, `resume-${session.sessionId.slice(0, 8)}.md`);
-  writeSecureFile(reportPath, markdown);
+  const reportPath = join(outputDir, `resume-${session.sessionId.slice(0, 8)}.${ext}`);
+  writeSecureFile(reportPath, output);
 
   console.log();
-  console.log(markdown);
+  console.log(output);
   console.log();
   printSuccess(`再実行プランを保存しました: ${reportPath}`);
   printInfo(`合計 ${plan.totalCalls} 件の MCP ツール呼び出しが必要です。`);

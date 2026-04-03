@@ -10,12 +10,14 @@
  *   - Verification steps at the end
  */
 
+import chalk from "chalk";
 import type {
   ExecutionPlan,
   ModulePlan,
   McpToolCall,
 } from "./mcp-call.js";
 import type { ManualStep } from "../config/types.js";
+import { MODULE_CONSOLE_URLS } from "../config/constants.js";
 
 // ── Markdown Renderer ─────────────────────────────────────────────────────────
 
@@ -28,6 +30,12 @@ import type { ManualStep } from "../config/types.js";
 export function renderPlanAsMarkdown(plan: ExecutionPlan): string {
   const lines: string[] = [];
 
+  // ── Compute total step count (auto calls + manual steps across all modules) ──
+  const totalSteps = plan.modules.reduce(
+    (sum, m) => sum + m.calls.length + m.manualSteps.length,
+    0
+  );
+
   // ── Header ──────────────────────────────────────────────────────────────────
   lines.push("# Datadog Connect — Execution Plan");
   lines.push("");
@@ -38,6 +46,7 @@ export function renderPlanAsMarkdown(plan: ExecutionPlan): string {
   lines.push(`| Preset | \`${plan.preset}\` |`);
   lines.push(`| Created | ${formatDateTime(plan.createdAt)} |`);
   lines.push(`| Total MCP Calls | ${plan.totalCalls} |`);
+  lines.push(`| Total Steps | ${totalSteps} |`);
   lines.push(`| Modules | ${plan.modules.length} |`);
   lines.push("");
 
@@ -61,8 +70,9 @@ export function renderPlanAsMarkdown(plan: ExecutionPlan): string {
   lines.push("");
 
   // ── Per-module sections ──────────────────────────────────────────────────────
+  let globalStep = 0;
   plan.modules.forEach((mod, moduleIdx) => {
-    renderModuleSection(lines, mod, moduleIdx + 1);
+    globalStep = renderModuleSection(lines, mod, moduleIdx + 1, globalStep, totalSteps);
     lines.push("---");
     lines.push("");
   });
@@ -115,37 +125,43 @@ export function renderPlanAsJson(plan: ExecutionPlan): string {
 function renderModuleSection(
   lines: string[],
   mod: ModulePlan,
-  sectionNumber: number
-): void {
+  sectionNumber: number,
+  globalStep: number,
+  totalSteps: number
+): number {
   lines.push(`## ${sectionNumber}. ${mod.moduleName}`);
   lines.push("");
   lines.push(`**Module ID**: \`${mod.moduleId}\``);
   lines.push(`**Category**: \`${mod.category}\``);
   lines.push("");
 
-  // MCP Tool Calls
-  if (mod.calls.length === 0) {
-    lines.push("_No MCP tool calls for this module._");
+  // MCP Tool Calls (AUTO)
+  if (mod.calls.length === 0 && mod.manualSteps.length === 0) {
+    lines.push("_No steps for this module._");
     lines.push("");
   } else {
-    lines.push(`### MCP Tool Calls (${mod.calls.length})`);
-    lines.push("");
-    mod.calls.forEach((call, callIdx) => {
-      renderToolCall(lines, call, callIdx + 1);
-    });
-  }
+    if (mod.calls.length > 0) {
+      lines.push(`### MCP Tool Calls (${mod.calls.length})`);
+      lines.push("");
+      mod.calls.forEach((call) => {
+        globalStep += 1;
+        renderToolCall(lines, call, globalStep, totalSteps);
+      });
+    }
 
-  // Manual Steps
-  if (mod.manualSteps.length > 0) {
-    lines.push(`### Manual Steps`);
-    lines.push("");
-    lines.push(
-      "> **Manual intervention required** — perform the following steps before continuing."
-    );
-    lines.push("");
-    mod.manualSteps.forEach((step, idx) => {
-      renderManualStep(lines, step, idx + 1);
-    });
+    // Manual Steps
+    if (mod.manualSteps.length > 0) {
+      lines.push(`### Manual Steps`);
+      lines.push("");
+      lines.push(
+        "> **Manual intervention required** — perform the following steps before continuing."
+      );
+      lines.push("");
+      mod.manualSteps.forEach((step) => {
+        globalStep += 1;
+        renderManualStep(lines, step, globalStep, totalSteps);
+      });
+    }
   }
 
   // Verification Steps
@@ -156,15 +172,18 @@ function renderModuleSection(
       renderVerificationCall(lines, call, idx + 1);
     });
   }
+
+  return globalStep;
 }
 
 function renderToolCall(
   lines: string[],
   call: McpToolCall,
-  callNumber: number
+  globalStep: number,
+  totalSteps: number
 ): void {
   const idTag = call.id ? ` \`${call.id}\`` : "";
-  lines.push(`#### Step ${callNumber}: \`${call.tool}\``);
+  lines.push(`#### Step ${globalStep} of ${totalSteps} [AUTO]: \`${call.tool}\``);
   lines.push("");
   if (call.id) {
     lines.push(`**Call ID**:${idTag}`);
@@ -194,9 +213,10 @@ function renderToolCall(
 function renderManualStep(
   lines: string[],
   step: ManualStep,
-  stepNumber: number
+  globalStep: number,
+  totalSteps: number
 ): void {
-  lines.push(`#### Manual Step ${stepNumber}: ${step.title}`);
+  lines.push(`#### Step ${globalStep} of ${totalSteps} [MANUAL]: ${step.title}`);
   lines.push("");
   lines.push(step.description);
   lines.push("");
@@ -233,6 +253,10 @@ function renderVerificationCall(
     lines.push("```");
     lines.push("");
   }
+  if (call.expectedOutput) {
+    lines.push(`**期待結果**: ${call.expectedOutput}`);
+    lines.push("");
+  }
 }
 
 /**
@@ -257,4 +281,65 @@ function toAnchor(title: string): string {
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
+}
+
+// ── Post-Setup Summary ────────────────────────────────────────────────────────
+
+/**
+ * Render a post-setup verification summary with Datadog console links.
+ *
+ * Shows a table of modules with their call counts and direct links to the
+ * relevant Datadog console pages, plus resume/rollback commands for reference.
+ */
+export function renderPostSetupSummary(plan: ExecutionPlan): string {
+  const consoleBase = "https://app.datadoghq.com";
+  const lines: string[] = [];
+
+  lines.push(chalk.bold.cyan("\n  セットアップサマリー"));
+  lines.push(chalk.dim("  " + "─".repeat(50)));
+  lines.push("");
+
+  // Module table
+  lines.push(
+    `  ${chalk.bold("モジュール".padEnd(20))}  ${chalk.bold("呼び出し数".padEnd(10))}  ${chalk.bold("コンソールURL")}`
+  );
+  lines.push(chalk.dim("  " + "─".repeat(70)));
+
+  for (const mod of plan.modules) {
+    const consolePath = MODULE_CONSOLE_URLS[mod.moduleId];
+    const url = consolePath ? chalk.cyan(`${consoleBase}${consolePath}`) : chalk.dim("—");
+    const callCount = String(mod.calls.length).padEnd(10);
+    const modName = mod.moduleName.padEnd(20);
+    lines.push(`  ${modName}  ${callCount}  ${url}`);
+  }
+
+  lines.push("");
+  lines.push(chalk.dim("  " + "─".repeat(50)));
+
+  // Totals
+  lines.push(
+    `  合計: ${chalk.bold(String(plan.modules.length))} モジュール / ` +
+      `${chalk.bold(String(plan.totalCalls))} MCP 呼び出し`
+  );
+
+  lines.push("");
+
+  // Next steps
+  lines.push(chalk.bold("  次のステップ"));
+  lines.push(chalk.dim("  ─────────────"));
+  lines.push(
+    `  1. 上記ランブックの MCP ツール呼び出しを順番に実行してください`
+  );
+  lines.push(
+    `  2. Datadog MCP 未設定の場合: ${chalk.cyan("datadog-connect mcp")}`
+  );
+  lines.push(
+    `  3. 途中から再開する場合:     ${chalk.cyan(`datadog-connect resume --session ${plan.sessionId}`)}`
+  );
+  lines.push(
+    `  4. ロールバックする場合:     ${chalk.cyan(`datadog-connect rollback --session ${plan.sessionId}`)}`
+  );
+  lines.push("");
+
+  return lines.join("\n");
 }

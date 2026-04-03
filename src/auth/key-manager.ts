@@ -114,6 +114,9 @@ export async function promptCredentials(profile: string): Promise<Credentials> {
   console.log(chalk.dim("  └─────────────────────────────────────────────────┘"));
   console.log();
 
+  let lastApiKey = "";
+  let lastAppKey = "";
+
   for (let attempt = 1; attempt <= 3; attempt++) {
     if (attempt > 1) {
       printInfo(`再試行 (${attempt}/3) — API Key と Application Key を確認してください。`);
@@ -127,6 +130,9 @@ export async function promptCredentials(profile: string): Promise<Credentials> {
     const apiKey = await password({ message: "API Key:", mask: "*" });
     const appKey = await password({ message: "Application Key:", mask: "*" });
 
+    lastApiKey = apiKey;
+    lastAppKey = appKey;
+
     const creds: Credentials = { site, apiKey, appKey, profile };
 
     startSpinner("認証情報を検証中...");
@@ -139,7 +145,22 @@ export async function promptCredentials(profile: string): Promise<Credentials> {
     failSpinner(`認証情報の形式が無効です (${attempt}/3)`);
   }
 
-  // 3回失敗
+  // After 3 failures, give specific diagnosis
+  if (lastApiKey && !/^[0-9a-f]{32}$/i.test(lastApiKey)) {
+    if (lastApiKey.length !== 32) {
+      printError(`  API Key: ${lastApiKey.length}文字です（32文字必要）`);
+    } else {
+      printError(`  API Key: 16進数以外の文字が含まれています`);
+    }
+  }
+  if (lastAppKey && !/^[0-9a-f]{40}$/i.test(lastAppKey)) {
+    if (lastAppKey.length !== 40) {
+      printError(`  App Key: ${lastAppKey.length}文字です（40文字必要）`);
+    } else {
+      printError(`  App Key: 16進数以外の文字が含まれています`);
+    }
+  }
+  printInfo("  ブラウザ自動取得を試す場合: datadog-connect setup → ブラウザ取得を選択");
   printError("認証に3回失敗しました。以下を確認してください:");
   printInfo("  1. API Key が正しいか (Organization Settings > API Keys)");
   printInfo("  2. Application Key が正しいか (Organization Settings > Application Keys)");

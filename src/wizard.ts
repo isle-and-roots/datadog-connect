@@ -7,15 +7,30 @@ import chalk from "chalk";
 import { getSecureOutputDir, writeSecureFile } from "./utils/secure-write.js";
 import { PRESET_META, PRESET_MODULE_MAP, CUSTOM_WIZARD_DEFAULTS } from "./knowledge/presets.js";
 import { buildExecutionPlanFromIds } from "./orchestrator/plan-builder.js";
-import { renderPlanAsMarkdown } from "./orchestrator/plan-renderer.js";
+import { renderPlanAsMarkdown, renderPlanAsJson, renderPostSetupSummary } from "./orchestrator/plan-renderer.js";
+import { runPreflight, printPreflightResult, hasApiKeyFormatError } from "./utils/preflight.js";
 import type { BaseModule } from "./modules/base-module.js";
 import { join } from "node:path";
 
 // Register modules (side-effect imports)
 import "./modules/all.js";
 
-export async function runSetup(opts: { profile: string }): Promise<void> {
+export async function runSetup(opts: { profile: string; format?: string }): Promise<void> {
   printBanner();
+
+  // Pre-flight checks
+  const preflightResult = runPreflight();
+  if (preflightResult.checks.length > 0) {
+    printPreflightResult(preflightResult);
+    if (hasApiKeyFormatError(preflightResult)) {
+      printError(
+        "APIキーのフォーマットが正しくありません。環境変数を確認してから再実行してください。"
+      );
+      printInfo("  export DD_API_KEY=\"32文字の16進数\"");
+      printInfo("  export DD_APP_KEY=\"40文字の16進数\"");
+      return;
+    }
+  }
 
   // Step 1: Auth (format validation only in MCP Harness mode)
   const creds = await promptCredentials(opts.profile);
@@ -116,27 +131,23 @@ export async function runSetup(opts: { profile: string }): Promise<void> {
     return;
   }
 
-  const markdown = renderPlanAsMarkdown(plan);
+  const useJson = opts.format === "json";
+  const output = useJson ? renderPlanAsJson(plan) : renderPlanAsMarkdown(plan);
+  const ext = useJson ? "json" : "md";
 
   // 出力先に保存
   const outputDir = getSecureOutputDir();
-  const reportPath = join(outputDir, `setup-${session.sessionId.slice(0, 8)}.md`);
-  writeSecureFile(reportPath, markdown);
+  const reportPath = join(outputDir, `setup-${session.sessionId.slice(0, 8)}.${ext}`);
+  writeSecureFile(reportPath, output);
 
   console.log();
-  console.log(markdown);
+  console.log(output);
   console.log();
   printSuccess(`実行プランを保存しました: ${reportPath}`);
 
-  // 次のステップ案内
-  console.log();
-  console.log(chalk.bold.cyan("  次のステップ"));
-  console.log(chalk.dim("  ─").repeat(25));
-  console.log();
-  printInfo(`1. 上記のランブックに従って MCP ツールを実行してください`);
-  printInfo(`2. Datadog MCP が設定されていない場合: ${chalk.cyan("datadog-connect mcp")}`);
-  printInfo(`3. 合計 ${plan.totalCalls} 件の MCP ツール呼び出しが必要です`);
-  printInfo(`4. Datadog コンソールで確認 — https://app.datadoghq.com`);
+  // セットアップ完了サマリー（Datadog管理画面URL付き）
+  const summary = renderPostSetupSummary(plan);
+  console.log(summary);
 }
 
 /** セッション保存前にcredential系フィールドを除去 */

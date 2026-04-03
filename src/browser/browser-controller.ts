@@ -2,6 +2,7 @@ import { execSync } from "node:child_process";
 import { confirm } from "@inquirer/prompts";
 import { printInfo, printSuccess, printError } from "../utils/prompts.js";
 import { startSpinner, succeedSpinner, failSpinner } from "../utils/spinner.js";
+import { logDebugError } from "../utils/error-helpers.js";
 
 // Playwright の型だけ import（実行時は dynamic import）
 type Browser = import("playwright").Browser;
@@ -16,7 +17,8 @@ export class BrowserController {
     try {
       await import("playwright");
       return true;
-    } catch {
+    } catch (err) {
+      logDebugError("Playwright import", err);
       return false;
     }
   }
@@ -35,8 +37,9 @@ export class BrowserController {
       const testBrowser = await pw.chromium.launch({ headless: true });
       await testBrowser.close();
       return true;
-    } catch {
+    } catch (err) {
       // Chromium がDLされていない
+      logDebugError("Chromium launch test", err);
       const shouldInstall = await confirm({
         message: "ブラウザ (Chromium) をダウンロードしますか？ (約100MB)",
         default: true,

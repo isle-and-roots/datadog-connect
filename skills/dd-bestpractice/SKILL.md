@@ -1,6 +1,6 @@
 ---
 name: dd-bestpractice
-description: "Monitoring best practices skill for Datadog. Use when user asks what to monitor, wants recommended monitors, best practices for observability. Triggers: '監視のベストプラクティス', 'recommended monitors', '何を監視すべき', 'monitoring recommendations', 'モニター設定', 'SLO設定', 'what should I monitor'. Do NOT load for: initial setup tasks, incident investigation, audit tasks."
+description: "Monitoring best practices skill for Datadog. Use when user asks what to monitor, wants recommended monitors, best practices for observability. Triggers: '監視のベストプラクティス', 'recommended monitors', '何を監視すべき', 'monitoring recommendations', 'モニター設定', 'SLO設定', 'what should I monitor', 'アラート多すぎ', 'alert fatigue', 'what monitors do I need', 'monitor recommendations', 'too many notifications'. Do NOT load for: initial setup tasks, incident investigation, audit tasks, alert noise analysis (use dd-audit), cost optimization (use dd-audit)."
 description-ja: "スタック別監視ベストプラクティス。スタック特定 → 推奨モニター照合 → ギャップ分析 → 実装計画を提供。"
 allowed-tools: ["Bash", "Read", "Write", "Edit"]
 argument-hint: "[stack-type]"

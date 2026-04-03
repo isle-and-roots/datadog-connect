@@ -1,6 +1,6 @@
 ---
 name: dd-incident
-description: "Incident response and investigation skill for Datadog. Use when user needs to investigate alerts, debug production issues, respond to incidents. Triggers: '障害調査', 'investigate alert', 'production issue', 'インシデント対応', 'アラートが鳴っている', 'サービスが落ちた', 'エラーが増えた', 'latency spike', '本番問題'. Do NOT load for: setup tasks, best practices consultation, audit/optimization tasks."
+description: "Incident response and investigation skill for Datadog. Use when user needs to investigate alerts, debug production issues, respond to incidents. Triggers: '障害調査', 'investigate alert', 'production issue', 'インシデント対応', 'アラートが鳴っている', 'サービスが落ちた', 'エラーが増えた', 'latency spike', '本番問題', 'error rate increasing', '高負荷', 'timeout増加', 'service down', 'レスポンス遅い', 'performance degradation'. Do NOT load for: setup tasks, best practices consultation, audit/optimization tasks."
 description-ja: "インシデント対応・障害調査スキル。トリアージ → タイムライン構築 → 相関分析 → レポートと再発防止策を提供。"
 allowed-tools: ["Bash", "Read", "Write", "Edit"]
 argument-hint: "[alert-id|service-name]"

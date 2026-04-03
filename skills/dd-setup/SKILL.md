@@ -1,6 +1,6 @@
 ---
 name: dd-setup
-description: "Guided Datadog setup skill. Use when user wants to set up Datadog, add integrations, configure monitoring for a new environment. Triggers: 'Datadogをセットアップ', 'monitoring setup', 'Datadog configure', 'Datadog初期設定', 'インテグレーション追加', 'add AWS integration'. Do NOT load for: querying existing monitors, incident investigation, audit tasks."
+description: "Guided Datadog setup skill. Use when user wants to set up Datadog, add integrations, configure monitoring for a new environment. Triggers: 'Datadogをセットアップ', 'monitoring setup', 'Datadog configure', 'Datadog初期設定', 'インテグレーション追加', 'add AWS integration', 'already configured', '再設定', 'reconfigure', 'monitoring始めたい', 'Terraform monitoring', '既に設定済み', 'extend monitoring'. Do NOT load for: querying existing monitors, incident investigation, audit tasks."
 description-ja: "ガイド付き Datadog セットアップ。環境検出 → プリセット推奨 → 公式 Datadog MCP コール計画を自動生成。"
 allowed-tools: ["Bash", "Read", "Write", "Edit"]
 argument-hint: "[stack-profile]"

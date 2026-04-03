@@ -3,6 +3,7 @@ import { BaseModule } from "../base-module.js";
 import { registerModule } from "../registry.js";
 import { promptTags } from "../shared/tags.js";
 import { printManual } from "../../utils/prompts.js";
+import { logDebugError } from "../../utils/error-helpers.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
 import type { ModulePlan, McpToolCall } from "../../orchestrator/mcp-call.js";
 import { writeExecutableFile, getSecureOutputDir } from "../../utils/secure-write.js";
@@ -62,8 +63,8 @@ class AzureModule extends BaseModule {
           try {
             await browserCtrl.launch();
             fetched = await fetchAzureSubIdFromBrowser(browserCtrl);
-          } catch {
-            // ブラウザ操作失敗
+          } catch (err) {
+            logDebugError("Azure browser fetch", err);
           } finally {
             await browserCtrl.close();
           }

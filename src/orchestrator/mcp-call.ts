@@ -25,6 +25,8 @@ export interface McpToolCall {
   rollbackCall?: Omit<McpToolCall, "rollbackCall">;
   /** Unique identifier for this call within the plan */
   id?: string;
+  /** Expected output or verification result after executing this call */
+  expectedOutput?: string;
 }
 
 // ── Module Plan ───────────────────────────────────────────────────────────────

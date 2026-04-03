@@ -4,6 +4,7 @@ import { registerModule } from "../registry.js";
 import { promptTags } from "../shared/tags.js";
 import { validateAwsAccountId } from "../../utils/validators.js";
 import { printManual } from "../../utils/prompts.js";
+import { logDebugError } from "../../utils/error-helpers.js";
 import { RESOURCE_PREFIX } from "../../config/constants.js";
 import {
   AWS_SERVICES,
@@ -52,8 +53,8 @@ class AwsModule extends BaseModule {
           try {
             await browserCtrl.launch();
             fetched = await fetchAwsAccountIdFromBrowser(browserCtrl);
-          } catch {
-            // ブラウザ操作失敗
+          } catch (err) {
+            logDebugError("AWS browser fetch", err);
           } finally {
             await browserCtrl.close();
           }
