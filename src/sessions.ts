@@ -45,7 +45,7 @@ export async function runSessions(opts: { limit?: number }): Promise<void> {
       chalk.cyan(s.shortId.padEnd(col.id)),
       chalk.white(dateStr.padEnd(col.date)),
       chalk.dim(s.site.padEnd(col.site)),
-      chalk.dim(s.preset.padEnd(col.preset)),
+      chalk.dim(s.profile.padEnd(col.preset)),
       chalk.dim(String(s.moduleCount).padEnd(col.modules)),
       statusStr,
     ].join("  ");

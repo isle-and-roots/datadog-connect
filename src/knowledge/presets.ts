@@ -181,7 +181,7 @@ export const DEFAULT_MODULE_CONFIGS: DefaultModuleConfig = {
   cspm: { clouds: [], tags: [] },
   cws: { tags: [] },
   asm: { enableWaf: true, tags: [] },
-  siem: { packs: ["AUTH_PACK"], tags: [] },
+  siem: { packs: ["auth"], tags: [] },
   "sensitive-data": { patterns: ["PII"], tags: [] },
   aws: { tags: [] },
   gcp: { tags: [] },

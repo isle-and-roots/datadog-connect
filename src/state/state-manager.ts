@@ -19,7 +19,7 @@ export interface SessionSummary {
   shortId: string;
   createdAt: string;
   site: string;
-  preset: string;
+  profile: string;
   moduleCount: number;
   status: "completed" | "partial" | "pending";
 }
@@ -59,7 +59,7 @@ export function listSessions(limit = 10): SessionSummary[] {
         shortId: session.sessionId.slice(0, 8),
         createdAt: session.startedAt,
         site: session.site,
-        preset: session.profile,
+        profile: session.profile,
         moduleCount,
         status,
       });

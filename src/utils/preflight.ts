@@ -21,7 +21,7 @@ export function runPreflight(): PreflightResult {
   const checks: PreflightCheck[] = [];
 
   // Check 1: DD_API_KEY format (if set)
-  const apiKey = process.env.DD_API_KEY;
+  const apiKey = process.env.DD_API_KEY?.trim();
   if (apiKey) {
     const valid = /^[0-9a-f]{32}$/i.test(apiKey);
     checks.push({
@@ -29,12 +29,12 @@ export function runPreflight(): PreflightResult {
       passed: valid,
       message: valid
         ? "フォーマットOK (32文字16進数)"
-        : `フォーマット不正: ${apiKey.length}文字 (32文字の16進数が必要)`,
+        : "フォーマット不正 (32文字の16進数が必要。正しいキーをコピーしてください)",
     });
   }
 
   // Check 2: DD_APP_KEY format (if set)
-  const appKey = process.env.DD_APP_KEY;
+  const appKey = process.env.DD_APP_KEY?.trim();
   if (appKey) {
     const valid = /^[0-9a-f]{40}$/i.test(appKey);
     checks.push({
@@ -42,7 +42,7 @@ export function runPreflight(): PreflightResult {
       passed: valid,
       message: valid
         ? "フォーマットOK (40文字16進数)"
-        : `フォーマット不正: ${appKey.length}文字 (40文字の16進数が必要)`,
+        : "フォーマット不正 (40文字の16進数が必要。正しいキーをコピーしてください)",
     });
   }
 

@@ -27,7 +27,7 @@ export async function runPlan(opts: PlanOptions): Promise<void> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     printError(`プラン生成に失敗しました: ${msg}`);
-    printInfo(`利用可能なプリセット: recommended, aws, gcp, azure, security, xserver, full, custom`);
+    printInfo(`利用可能なプリセット: minimal, recommended, aws, gcp, azure, security, xserver, full, custom`);
     process.exit(1);
   }
 

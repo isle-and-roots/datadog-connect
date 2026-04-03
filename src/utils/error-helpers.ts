@@ -17,6 +17,6 @@ export function formatRecoveryError(
 
 export function logDebugError(context: string, error: unknown): void {
   // Write to stderr for debugging (not stdout which may be piped)
-  const msg = error instanceof Error ? error.stack ?? error.message : String(error);
+  const msg = error instanceof Error ? error.message : String(error);
   console.error(chalk.dim(`  [DEBUG] ${context}: ${msg}`));
 }

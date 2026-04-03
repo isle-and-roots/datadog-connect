@@ -30,6 +30,14 @@ export const MODULE_CONSOLE_URLS: Record<string, string> = {
   aws: "/integrations/amazon-web-services",
   gcp: "/integrations/google-cloud-platform",
   azure: "/integrations/azure",
+  "on-prem": "/infrastructure/list",
+  kubernetes: "/infrastructure/kubernetes",
+  xserver: "/infrastructure/list",
+  cspm: "/security/cspm",
+  cws: "/security/cws",
+  asm: "/security/appsec",
+  siem: "/security/detection-rules",
+  "sensitive-data": "/security/sensitive-data-scanner",
 };
 
 export const STATE_DIR = ".datadog-connect";

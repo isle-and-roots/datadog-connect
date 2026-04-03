@@ -63,7 +63,12 @@ program
   .description("セッション一覧を表示")
   .option("-n, --limit <n>", "表示件数", "10")
   .action(async (opts) => {
-    await runSessions({ limit: parseInt(opts.limit, 10) });
+    const limit = parseInt(opts.limit, 10);
+    if (isNaN(limit) || limit <= 0) {
+      console.error("--limit の値が不正です。正の整数を指定してください。");
+      process.exit(1);
+    }
+    await runSessions({ limit });
   });
 
 program.parse();
