@@ -3,19 +3,12 @@ import { BaseModule } from "../base-module.js";
 import { registerModule } from "../registry.js";
 import { RESOURCE_PREFIX } from "../../config/constants.js";
 import { printManual, printSuccess, printInfo } from "../../utils/prompts.js";
+import { APM_LANGUAGES, generateInstrumentationGuide, buildServiceCatalogEntry } from "../../knowledge/apm-guides.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
-import type { DatadogClient } from "../../client/datadog-client.js";
 import { writeSecureFile, getSecureOutputDir } from "../../utils/secure-write.js";
+import type { ModulePlan, McpToolCall } from "../../orchestrator/mcp-call.js";
 
-const LANGUAGES = [
-  { value: "java", name: "Java" },
-  { value: "python", name: "Python" },
-  { value: "nodejs", name: "Node.js" },
-  { value: "go", name: "Go" },
-  { value: "ruby", name: "Ruby" },
-  { value: "dotnet", name: ".NET" },
-  { value: "php", name: "PHP" },
-];
+const LANGUAGES = APM_LANGUAGES;
 
 interface ApmConfig extends ModuleConfig {
   languages: string[];
@@ -32,6 +25,52 @@ class ApmModule extends BaseModule {
   readonly description = "アプリケーションパフォーマンス監視を設定";
   readonly category = "feature" as const;
   readonly dependencies: string[] = [];
+
+  plan(config: ModuleConfig): ModulePlan {
+    const cfg = config as ApmConfig;
+    const calls: McpToolCall[] = [];
+    const manualSteps = [];
+
+    // Service catalog registration calls
+    for (const svc of cfg.services ?? []) {
+      const entry = buildServiceCatalogEntry(svc.name, svc.language, RESOURCE_PREFIX);
+      calls.push({
+        tool: "datadog_create_service_definition",
+        parameters: { ...entry },
+        description: `サービスカタログにサービス「${svc.name}」を登録`,
+      });
+    }
+
+    // APM instrumentation manual steps per language
+    for (const lang of cfg.languages ?? []) {
+      const guide = generateInstrumentationGuide(lang as Parameters<typeof generateInstrumentationGuide>[0], {
+        environment: cfg.environment ?? "production",
+        enableProfiling: cfg.enableProfiling ?? false,
+        enableDataStreams: cfg.enableDataStreams ?? false,
+      });
+
+      manualSteps.push({
+        title: `APM計装ガイド (${lang})`,
+        description: `${lang}アプリケーションにDatadog APMライブラリを追加してください。\n\n${guide}`,
+        commands: [],
+      });
+    }
+
+    return {
+      moduleId: this.id,
+      moduleName: this.name,
+      category: this.category,
+      calls,
+      manualSteps,
+      verificationCalls: [
+        {
+          tool: "datadog_list_service_definitions",
+          parameters: {},
+          description: "サービスカタログの登録状況を確認",
+        },
+      ],
+    };
+  }
 
   async prompt(): Promise<ApmConfig> {
     const languages = await checkbox({
@@ -89,7 +128,7 @@ class ApmModule extends BaseModule {
     return { languages, services, environment, samplingRate, enableProfiling, enableDataStreams };
   }
 
-  async execute(config: ApmConfig, client: DatadogClient): Promise<ExecutionResult> {
+  async execute(config: ApmConfig, client: unknown): Promise<ExecutionResult> {
     const resources = [];
     const manualSteps = [];
     const errors = [];
@@ -97,7 +136,7 @@ class ApmModule extends BaseModule {
     // Register services in Service Catalog
     for (const svc of config.services) {
       try {
-        await client.v2.serviceDefinition.createOrUpdateServiceDefinitions({
+        await (client as any).v2.serviceDefinition.createOrUpdateServiceDefinitions({
           body: {
             schemaVersion: "v2.1",
             ddService: svc.name,
@@ -128,7 +167,11 @@ class ApmModule extends BaseModule {
     const outputDir = getSecureOutputDir();
 
     for (const lang of config.languages) {
-      const guide = generateInstrumentationGuide(lang, config);
+      const guide = generateInstrumentationGuide(lang as Parameters<typeof generateInstrumentationGuide>[0], {
+        environment: config.environment,
+        enableProfiling: config.enableProfiling,
+        enableDataStreams: config.enableDataStreams,
+      });
       const guidePath = `${outputDir}/apm-instrumentation-${lang}.md`;
       writeSecureFile(guidePath, guide);
 
@@ -144,10 +187,10 @@ class ApmModule extends BaseModule {
     return { success: errors.length === 0, resources, manualSteps, errors };
   }
 
-  async verify(client: DatadogClient): Promise<VerificationResult> {
+  async verify(client: unknown): Promise<VerificationResult> {
     const checks = [];
     try {
-      const resp = await client.v2.serviceDefinition.listServiceDefinitions();
+      const resp = await (client as any).v2.serviceDefinition.listServiceDefinitions();
       const data = resp.data ?? [];
       const expected = this.createdResources.length;
       checks.push({
@@ -164,131 +207,6 @@ class ApmModule extends BaseModule {
     }
     return { success: checks.every((c) => c.passed), checks };
   }
-}
-
-function generateInstrumentationGuide(lang: string, config: ApmConfig): string {
-  const guides: Record<string, string> = {
-    nodejs: `# Node.js APM 計装ガイド
-## 1. ライブラリインストール
-\`\`\`bash
-npm install dd-trace
-\`\`\`
-
-## 2. アプリケーション起動時に初期化
-\`\`\`javascript
-// app.js の先頭に追加
-require('dd-trace').init({
-  service: '<SERVICE_NAME>',
-  env: '${config.environment}',
-  version: '1.0.0',
-  ${config.enableProfiling ? "profiling: true," : ""}
-  runtimeMetrics: true,
-});
-\`\`\`
-
-## 3. 環境変数
-\`\`\`bash
-DD_AGENT_HOST=localhost
-DD_TRACE_AGENT_PORT=8126
-DD_ENV=${config.environment}
-\`\`\`
-`,
-    python: `# Python APM 計装ガイド
-## 1. ライブラリインストール
-\`\`\`bash
-pip install ddtrace
-\`\`\`
-
-## 2. アプリケーション起動
-\`\`\`bash
-ddtrace-run python app.py
-# または
-DD_SERVICE=<SERVICE_NAME> DD_ENV=${config.environment} ddtrace-run gunicorn app:app
-\`\`\`
-
-## 3. 環境変数
-\`\`\`bash
-DD_SERVICE=<SERVICE_NAME>
-DD_ENV=${config.environment}
-${config.enableProfiling ? "DD_PROFILING_ENABLED=true" : ""}
-\`\`\`
-`,
-    java: `# Java APM 計装ガイド
-## 1. Agent ダウンロード
-\`\`\`bash
-curl -Lo dd-java-agent.jar https://dtdg.co/latest-java-tracer
-\`\`\`
-
-## 2. JVMオプション追加
-\`\`\`bash
-java -javaagent:dd-java-agent.jar \\
-  -Ddd.service=<SERVICE_NAME> \\
-  -Ddd.env=${config.environment} \\
-  ${config.enableProfiling ? "-Ddd.profiling.enabled=true \\\n  " : ""}-jar app.jar
-\`\`\`
-`,
-    go: `# Go APM 計装ガイド
-## 1. ライブラリインストール
-\`\`\`bash
-go get gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer
-\`\`\`
-
-## 2. コードに追加
-\`\`\`go
-import "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
-
-func main() {
-    tracer.Start(
-        tracer.WithService("<SERVICE_NAME>"),
-        tracer.WithEnv("${config.environment}"),
-    )
-    defer tracer.Stop()
-}
-\`\`\`
-`,
-    ruby: `# Ruby APM 計装ガイド
-## 1. Gemfileに追加
-\`\`\`ruby
-gem 'datadog', require: 'datadog/auto_instrument'
-\`\`\`
-
-## 2. 環境変数
-\`\`\`bash
-DD_SERVICE=<SERVICE_NAME>
-DD_ENV=${config.environment}
-\`\`\`
-`,
-    dotnet: `# .NET APM 計装ガイド
-## 1. NuGetパッケージ追加
-\`\`\`bash
-dotnet add package Datadog.Trace.Bundle
-\`\`\`
-
-## 2. 環境変数
-\`\`\`bash
-DD_SERVICE=<SERVICE_NAME>
-DD_ENV=${config.environment}
-CORECLR_ENABLE_PROFILING=1
-CORECLR_PROFILER={846F5F1C-F9AE-4B07-969E-05C26BC060D8}
-\`\`\`
-`,
-    php: `# PHP APM 計装ガイド
-## 1. 拡張インストール
-\`\`\`bash
-# pecl
-pecl install datadog_trace
-echo "extension=ddtrace.so" >> php.ini
-\`\`\`
-
-## 2. 環境変数
-\`\`\`bash
-DD_SERVICE=<SERVICE_NAME>
-DD_ENV=${config.environment}
-\`\`\`
-`,
-  };
-
-  return guides[lang] ?? `# ${lang} APM 計装ガイド\nSee: https://docs.datadoghq.com/tracing/trace_collection/\n`;
 }
 
 registerModule(new ApmModule());

@@ -5,22 +5,19 @@ import { promptTags } from "../shared/tags.js";
 import { validateAwsAccountId } from "../../utils/validators.js";
 import { printManual } from "../../utils/prompts.js";
 import { RESOURCE_PREFIX } from "../../config/constants.js";
+import {
+  AWS_SERVICES,
+  AWS_LOG_SERVICES,
+  AWS_REGIONS,
+  AWS_DEFAULT_SERVICES,
+  AWS_DEFAULT_LOG_SERVICES,
+  generateAwsCfnTemplate,
+} from "../../knowledge/cloud-configs.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
-import type { DatadogClient } from "../../client/datadog-client.js";
+import type { ModulePlan, McpToolCall } from "../../orchestrator/mcp-call.js";
 import { writeSecureFile, getSecureOutputDir } from "../../utils/secure-write.js";
 import { getBrowserController } from "../../browser/browser-controller.js";
 import { fetchAwsAccountId as fetchAwsAccountIdFromBrowser } from "../../browser/cloud-browser.js";
-
-const AWS_SERVICES = [
-  "ec2", "rds", "elb", "elbv2", "lambda", "s3", "cloudfront",
-  "dynamodb", "ecs", "eks", "elasticache", "kinesis", "sqs", "sns",
-  "redshift", "apigateway", "route53",
-];
-
-const AWS_LOG_SERVICES = [
-  "cloudtrail", "vpc-flow-logs", "rds", "lambda", "elb", "s3-access",
-  "cloudfront",
-];
 
 interface AwsConfig extends ModuleConfig {
   accountId: string;
@@ -77,13 +74,7 @@ class AwsModule extends BaseModule {
 
     const regions = await checkbox({
       message: "監視するリージョン:",
-      choices: [
-        { value: "ap-northeast-1", name: "ap-northeast-1 (Tokyo)", checked: true },
-        { value: "us-east-1", name: "us-east-1 (N. Virginia)", checked: true },
-        { value: "us-west-2", name: "us-west-2 (Oregon)" },
-        { value: "eu-west-1", name: "eu-west-1 (Ireland)" },
-        { value: "ap-southeast-1", name: "ap-southeast-1 (Singapore)" },
-      ],
+      choices: AWS_REGIONS.map((r) => ({ value: r.value, name: r.name, checked: r.defaultChecked })),
     });
 
     const services = await checkbox({
@@ -136,14 +127,91 @@ class AwsModule extends BaseModule {
     };
   }
 
-  async execute(config: AwsConfig, client: DatadogClient): Promise<ExecutionResult> {
+  plan(config: ModuleConfig): ModulePlan {
+    const awsConfig = config as AwsConfig;
+    const calls: McpToolCall[] = [];
+    const verificationCalls: McpToolCall[] = [];
+
+    const accountId = awsConfig.accountId ?? "<AWS_ACCOUNT_ID>";
+    const regions = awsConfig.regions ?? ["ap-northeast-1", "us-east-1"];
+    const services = awsConfig.services ?? [...AWS_DEFAULT_SERVICES];
+    const enableLogs = awsConfig.enableLogs ?? true;
+    const logServices = awsConfig.logServices ?? [...AWS_DEFAULT_LOG_SERVICES];
+    const enableCost = awsConfig.enableCost ?? false;
+    const enableCspm = awsConfig.enableCspm ?? false;
+    const tags = awsConfig.tags ?? [];
+
+    // Step 1: Create AWS integration account in Datadog
+    calls.push({
+      id: "create_aws_account",
+      tool: "datadog_create_aws_integration",
+      parameters: {
+        aws_account_id: accountId,
+        aws_partition: "aws",
+        regions_include_only: regions,
+        metrics_automute_enabled: true,
+        metrics_tag_filters: tags.length > 0
+          ? services.map((s) => ({ namespace: `aws:${s}`, tags }))
+          : [],
+        logs_lambda_forwarder_enabled: enableLogs,
+        log_services: logServices,
+        cost_enabled: enableCost,
+        cspm_resource_collection_enabled: enableCspm,
+        role_name: `${RESOURCE_PREFIX}-DatadogIntegrationRole`,
+      },
+      description: `AWS アカウント ${accountId} の Datadog 統合を作成`,
+    });
+
+    // Step 2: Generate CloudFormation template (manual — AWS side)
+    const cfnTemplate = generateAwsCfnTemplate(RESOURCE_PREFIX);
+    const manualSteps = [
+      {
+        title: "AWS IAM ロールを作成 (CloudFormation)",
+        description:
+          "以下の CloudFormation テンプレートを AWS コンソールまたは CLI でデプロイしてください。" +
+          "External ID は Datadog コンソール (Integrations > Amazon Web Services) で確認できます。",
+        commands: [
+          `# テンプレートをファイルに保存してからデプロイ`,
+          `aws cloudformation deploy \\`,
+          `  --template-body file://aws-iam-role.yaml \\`,
+          `  --stack-name DatadogIntegration \\`,
+          `  --capabilities CAPABILITY_NAMED_IAM`,
+        ],
+        outputFile: `aws-iam-role.yaml`,
+      },
+      {
+        title: "CloudFormation テンプレート内容",
+        description: cfnTemplate,
+      },
+    ];
+
+    // Verification: list AWS accounts and confirm the new account appears
+    verificationCalls.push({
+      id: "verify_aws_account",
+      tool: "datadog_list_aws_integrations",
+      parameters: {},
+      description: `AWS 統合一覧を取得して アカウント ${accountId} が登録されているか確認`,
+      dependsOn: ["create_aws_account"],
+    });
+
+    return {
+      moduleId: this.id,
+      moduleName: this.name,
+      category: this.category,
+      calls,
+      manualSteps,
+      verificationCalls,
+    };
+  }
+
+  async execute(config: AwsConfig, client: unknown): Promise<ExecutionResult> {
     const resources = [];
     const manualSteps = [];
     const errors = [];
 
     // Create AWS integration
     try {
-      const resp = await client.v2.aws.createAWSAccount({
+      const resp = await (client as any).v2.aws.createAWSAccount({
         body: {
           data: {
             type: "account",
@@ -191,7 +259,7 @@ class AwsModule extends BaseModule {
     }
 
     // Generate CloudFormation template for IAM role
-    const cfnTemplate = generateCfnTemplate(config.accountId);
+    const cfnTemplate = generateAwsCfnTemplate(RESOURCE_PREFIX);
     const outputDir = getSecureOutputDir();
     const cfnPath = `${outputDir}/aws-iam-role.yaml`;
     writeSecureFile(cfnPath, cfnTemplate);
@@ -219,13 +287,13 @@ class AwsModule extends BaseModule {
     };
   }
 
-  async verify(client: DatadogClient): Promise<VerificationResult> {
+  async verify(client: unknown): Promise<VerificationResult> {
     const checks = [];
     try {
-      const resp = await client.v2.aws.listAWSAccounts();
+      const resp = await (client as any).v2.aws.listAWSAccounts();
       const accounts = resp.data ?? [];
       const found = accounts.some(
-        (a) => a.id?.includes(this.createdResources[0]?.id ?? "")
+        (a: any) => a.id?.includes(this.createdResources[0]?.id ?? "")
       );
       checks.push({
         name: "AWS統合が登録されている",
@@ -241,119 +309,6 @@ class AwsModule extends BaseModule {
     }
     return { success: checks.every((c) => c.passed), checks };
   }
-}
-
-function generateCfnTemplate(accountId: string): string {
-  return `AWSTemplateFormatVersion: '2010-09-09'
-Description: Datadog Integration IAM Role (generated by Datadog Connect)
-
-Parameters:
-  ExternalId:
-    Type: String
-    Description: External ID from Datadog (AWS Integration page > Account Details > AWS External ID)
-    # IMPORTANT: Replace this with your actual Datadog External ID
-    # Find it at: Datadog > Integrations > Amazon Web Services > Add AWS Account > AWS External ID
-    Default: '<YOUR_DATADOG_EXTERNAL_ID>'
-
-Resources:
-  DatadogIntegrationRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: ${RESOURCE_PREFIX}-DatadogIntegrationRole
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS: 'arn:aws:iam::464622532012:root'
-            Action: 'sts:AssumeRole'
-            Condition:
-              StringEquals:
-                'sts:ExternalId': !Ref ExternalId
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/SecurityAudit'
-      Policies:
-        - PolicyName: DatadogAWSIntegrationPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'apigateway:GET'
-                  - 'autoscaling:Describe*'
-                  - 'backup:List*'
-                  - 'budgets:ViewBudget'
-                  - 'cloudfront:GetDistributionConfig'
-                  - 'cloudfront:ListDistributions'
-                  - 'cloudtrail:DescribeTrails'
-                  - 'cloudtrail:GetTrailStatus'
-                  - 'cloudtrail:LookupEvents'
-                  - 'cloudwatch:Describe*'
-                  - 'cloudwatch:Get*'
-                  - 'cloudwatch:List*'
-                  - 'codedeploy:List*'
-                  - 'codedeploy:BatchGet*'
-                  - 'directconnect:Describe*'
-                  - 'dynamodb:List*'
-                  - 'dynamodb:Describe*'
-                  - 'ec2:Describe*'
-                  - 'ecs:Describe*'
-                  - 'ecs:List*'
-                  - 'elasticache:Describe*'
-                  - 'elasticache:List*'
-                  - 'elasticfilesystem:DescribeFileSystems'
-                  - 'elasticfilesystem:DescribeTags'
-                  - 'elasticloadbalancing:Describe*'
-                  - 'elasticmapreduce:List*'
-                  - 'elasticmapreduce:Describe*'
-                  - 'es:DescribeElasticsearchDomains'
-                  - 'es:ListDomainNames'
-                  - 'es:ListTags'
-                  - 'health:DescribeEvents'
-                  - 'health:DescribeEventDetails'
-                  - 'health:DescribeAffectedEntities'
-                  - 'kinesis:List*'
-                  - 'kinesis:Describe*'
-                  - 'lambda:GetPolicy'
-                  - 'lambda:List*'
-                  - 'logs:DeleteSubscriptionFilter'
-                  - 'logs:DescribeLogGroups'
-                  - 'logs:DescribeLogStreams'
-                  - 'logs:DescribeSubscriptionFilters'
-                  - 'logs:FilterLogEvents'
-                  - 'logs:PutSubscriptionFilter'
-                  - 'logs:TestMetricFilter'
-                  - 'rds:Describe*'
-                  - 'rds:List*'
-                  - 'redshift:DescribeClusters'
-                  - 'redshift:DescribeLoggingStatus'
-                  - 'route53:List*'
-                  - 's3:GetBucketLogging'
-                  - 's3:GetBucketLocation'
-                  - 's3:GetBucketNotification'
-                  - 's3:GetBucketTagging'
-                  - 's3:ListAllMyBuckets'
-                  - 's3:PutBucketNotification'
-                  - 'ses:Get*'
-                  - 'sns:List*'
-                  - 'sns:Publish'
-                  - 'sqs:ListQueues'
-                  - 'states:ListStateMachines'
-                  - 'states:DescribeStateMachine'
-                  - 'support:DescribeTrustedAdvisor*'
-                  - 'support:RefreshTrustedAdvisorCheck'
-                  - 'tag:GetResources'
-                  - 'tag:GetTagKeys'
-                  - 'tag:GetTagValues'
-                  - 'xray:BatchGetTraces'
-                  - 'xray:GetTraceSummaries'
-                Resource: '*'
-
-Outputs:
-  RoleArn:
-    Description: The ARN of the Datadog Integration IAM Role
-    Value: !GetAtt DatadogIntegrationRole.Arn
-`;
 }
 
 // Auto-register

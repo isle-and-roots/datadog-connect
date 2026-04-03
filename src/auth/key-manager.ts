@@ -1,5 +1,4 @@
 import { select, password } from "@inquirer/prompts";
-import { client as ddClient, v1 } from "@datadog/datadog-api-client";
 import chalk from "chalk";
 import { DATADOG_SITES } from "../config/constants.js";
 import type { Credentials, DatadogSite } from "../config/types.js";
@@ -24,12 +23,12 @@ export async function promptCredentials(profile: string): Promise<Credentials> {
       appKey: envAppKey,
       profile,
     };
-    // validate
-    startSpinner("認証を検証中...");
-    const valid = await validateCredentials(creds);
+    // validate format only (no API call in MCP Harness mode)
+    startSpinner("認証情報を検証中...");
+    const valid = validateCredentialFormat(creds);
     if (!valid) {
-      failSpinner("環境変数の認証情報が無効です");
-      throw new Error("Invalid credentials from environment");
+      failSpinner("環境変数の認証情報の形式が無効です");
+      throw new Error("Invalid credentials format from environment");
     }
     succeedSpinner("認証OK (環境変数)");
     return creds;
@@ -74,24 +73,24 @@ export async function promptCredentials(profile: string): Promise<Credentials> {
 
         if (apiKey && appKey) {
           const creds: Credentials = { site, apiKey, appKey, profile };
-          startSpinner("認証を検証中...");
-          const valid = await validateCredentials(creds);
+          startSpinner("認証情報を検証中...");
+          const valid = validateCredentialFormat(creds);
           if (valid) {
             succeedSpinner("認証OK (ブラウザ)");
             return creds;
           }
-          failSpinner("取得したキーが無効です。手動入力に切り替えます。");
+          failSpinner("取得したキーの形式が無効です。手動入力に切り替えます。");
         } else if (apiKey) {
           printInfo("Application Key を手動で入力してください。");
           const manualAppKey = await password({ message: "Application Key:", mask: "*" });
           const creds: Credentials = { site, apiKey, appKey: manualAppKey, profile };
-          startSpinner("認証を検証中...");
-          const valid = await validateCredentials(creds);
+          startSpinner("認証情報を検証中...");
+          const valid = validateCredentialFormat(creds);
           if (valid) {
             succeedSpinner("認証OK (API Key: ブラウザ + App Key: 手動)");
             return creds;
           }
-          failSpinner("認証に失敗しました。手動入力に切り替えます。");
+          failSpinner("認証情報の形式が無効です。手動入力に切り替えます。");
         } else {
           await browserCtrl.close();
           printInfo("ブラウザでの取得に失敗しました。手動入力に切り替えます。");
@@ -130,14 +129,14 @@ export async function promptCredentials(profile: string): Promise<Credentials> {
 
     const creds: Credentials = { site, apiKey, appKey, profile };
 
-    startSpinner("認証を検証中...");
-    const valid = await validateCredentials(creds);
+    startSpinner("認証情報を検証中...");
+    const valid = validateCredentialFormat(creds);
     if (valid) {
       succeedSpinner("認証OK");
       return creds;
     }
 
-    failSpinner(`認証失敗 (${attempt}/3)`);
+    failSpinner(`認証情報の形式が無効です (${attempt}/3)`);
   }
 
   // 3回失敗
@@ -148,20 +147,13 @@ export async function promptCredentials(profile: string): Promise<Credentials> {
   throw new Error("認証に3回失敗しました");
 }
 
-async function validateCredentials(creds: Credentials): Promise<boolean> {
-  try {
-    const config = ddClient.createConfiguration({
-      authMethods: {
-        apiKeyAuth: creds.apiKey,
-        appKeyAuth: creds.appKey,
-      },
-    });
-    config.setServerVariables({ site: creds.site });
-
-    const api = new v1.AuthenticationApi(config);
-    const resp = await api.validate();
-    return resp.valid === true;
-  } catch {
-    return false;
-  }
+/**
+ * Validates the format of Datadog credentials without making any API calls.
+ * Datadog API keys are 32 hex characters.
+ * Datadog Application keys are 40 hex characters.
+ */
+function validateCredentialFormat(creds: Credentials): boolean {
+  const apiKeyValid = /^[0-9a-f]{32}$/i.test(creds.apiKey);
+  const appKeyValid = /^[0-9a-f]{40}$/i.test(creds.appKey);
+  return apiKeyValid && appKeyValid;
 }

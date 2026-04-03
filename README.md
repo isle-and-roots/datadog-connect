@@ -1,210 +1,306 @@
 # Datadog Connect
 
-Datadog の全機能セットアップを1コマンドで完結させる CLI ウィザード。
-対話形式でヒアリング → Datadog API で自動設定 → 手順書出力まで、ワンストップで行います。
+**Datadog の監視設定を、AI が全部やってくれるツール。**
 
-## 必要なもの
+[![npm version](https://img.shields.io/npm/v/datadog-connect)](https://www.npmjs.com/package/datadog-connect)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-| 項目 | 説明 |
-|------|------|
-| **Node.js v20+** | [ダウンロード](https://nodejs.org/) — `node -v` で `v20.x.x` 以上ならOK |
-| **Datadog アカウント** | [Datadog](https://www.datadoghq.com/) で無料アカウントを作成 |
-| **API Key & Application Key** | Datadog > Organization Settings > API Keys / Application Keys で取得（またはブラウザ自動取得） |
+---
 
-## 使い方
+## これは何？
+
+Datadog Connect は、[Datadog](https://www.datadoghq.com/)（サーバー監視サービス）の設定を **AI（Claude Code）に話しかけるだけ** で完了できるツールです。
+
+従来、Datadog の設定には専門知識が必要でした。このツールを使えば：
+
+```
+あなた：「AWS 環境の監視をセットアップして」
+  AI ：設定プランを作成 → 必要な手順書を自動生成
+```
+
+**技術知識がなくても、AI と対話するだけで監視環境を構築できます。**
+
+---
+
+## できること
+
+| やりたいこと | 話しかけ方 |
+|-------------|-----------|
+| 監視の初期設定 | 「Datadog をセットアップして」 |
+| 設定のおすすめを知りたい | 「うちの環境に合った監視設定を教えて」 |
+| 障害の原因を調べたい | 「本番でエラーが出てるから調べて」 |
+| 設定を見直したい | 「アラートが多すぎるから最適化して」 |
+| 設定を元に戻したい | 「さっきの変更を戻して」 |
+
+---
+
+## はじめかた（3ステップ）
+
+### Step 1: Datadog の API キーを用意する
+
+Datadog にログイン → **Organization Settings** → **API Keys** から取得します。
 
 ```bash
-npx datadog-connect setup
+# ターミナルで以下を実行（キーは自分のものに置き換え）
+export DD_API_KEY="ここにAPIキーを貼り付け"
+export DD_APP_KEY="ここにアプリケーションキーを貼り付け"
 ```
 
-これだけで対話型ウィザードが起動します。インストール不要。
+> **日本リージョンの方**: `export DD_SITE="ap1.datadoghq.com"` も追加してください
 
-### グローバルインストール
-
-頻繁に使う場合:
+### Step 2: ツールを接続する
 
 ```bash
-npm install -g datadog-connect
-datadog-connect setup
-```
-
-### ソースから実行
-
-```bash
-git clone https://github.com/isle-and-roots/datadog-connect.git
-cd datadog-connect
-npm install
-npm run setup
-```
-
-### ウィザードの流れ
-
-```
-🐕 Datadog Connect — かんたんセットアップ
-
-  Step 1: 認証
-  ? 認証情報の取得方法:
-    ❯ 🌐 ブラウザで自動取得（おすすめ）— ログインするだけでOK
-      ⌨️  手動入力 — キーを自分でコピペする
-
-  Step 2: セットアップタイプ
-  ? セットアップタイプを選んでください:
-    ⭐ おすすめセット — ダッシュボード + モニター + ログ
-    ☁️  AWS環境向け
-    ☁️  GCP環境向け
-    🔒 セキュリティ重視
-    🖥️  Xserver向け
-    🚀 フル — 全16モジュール
-    ⚙️  カスタム — 個別に選択
-
-  Step 3: ダッシュボード [1/3]
-  ✅ ダッシュボード 完了 (作成: 5件)
-
-  Step 4: モニター/アラート [2/3]
-  ✅ モニター/アラート 完了 (作成: 25件)
-
-  全て成功 (成功率 100%)
-  作成: 30件 | 手動手順: 0件 | エラー: 0件
-```
-
-### 結果を確認
-
-セットアップが完了すると:
-- **自動設定されたもの**: Datadog の管理画面にダッシュボードやモニターが作成されます
-- **手動手順書**: `~/.datadog-connect/output/` に手動で行う手順が出力されます
-
-## Features
-
-### 16 モジュール
-
-**Cloud (6)**
-| モジュール | 機能 |
-|-----------|------|
-| AWS | 統合API + IAMロール CloudFormation テンプレート |
-| GCP | STS統合 (Workload Identity Federation) + gcloud セットアップスクリプト |
-| Azure | 統合API + az CLI スクリプト |
-| On-Prem | OS別 Agent インストールコマンド + Ansible |
-| Kubernetes | Helm values / Operator CR 生成 |
-| Xserver | VPS/専用サーバー + Nginx/MySQL 監視設定 + ブラウザ自動設定 |
-
-**Feature (5)**
-| モジュール | 機能 |
-|-----------|------|
-| APM | サービスカタログ + 7言語計装ガイド |
-| Logs | パイプライン自動作成 (Nginx/Apache/JSON/Syslog) |
-| Dashboards | 5プリセット自動作成 |
-| Monitors | 6パック 25+定義 (Infra/AWS/K8s/APM/Logs/Cost) |
-| Synthetics | APIテスト自動作成 |
-
-**Security (5)**
-| モジュール | 機能 |
-|-----------|------|
-| CSPM | Agentless スキャン (AWS/GCP/Azure) |
-| CWS | ワークロード保護ポリシー・ルール |
-| ASM | WAFルール (monitor モード) + 除外フィルター |
-| SIEM | 検出ルール 4パック + シグナル通知 |
-| Sensitive Data Scanner | 機密データスキャン (PII/CC/APIキー) |
-
-### ブラウザ自動取得
-
-Playwright を使って、ログインするだけで各サービスの情報を自動取得:
-- **Datadog**: API Key / Application Key
-- **AWS**: Account ID
-- **GCP**: Project ID
-- **Azure**: Subscription ID
-- **Xserver**: VPS情報 + ファイアウォール自動設定
-
-## コマンド一覧
-
-| コマンド | 説明 |
-|---------|------|
-| `npx datadog-connect setup` | セットアップウィザードを開始 |
-| `npx datadog-connect resume` | 前回の失敗モジュールだけ再実行 |
-| `npx datadog-connect rollback` | 作成したリソースを削除 |
-| `npx datadog-connect mcp` | Datadog MCP サーバーを Claude Code に接続 |
-
-## Claude Code で使う
-
-### セットアップを自然言語で実行（MCP サーバー）
-
-Claude Code に「Datadogをセットアップして」と話しかけるだけでセットアップできます。
-
-```bash
-export DD_API_KEY="あなたのAPIキー"
-export DD_APP_KEY="あなたのApplicationキー"
-npx datadog-connect mcp --self
-```
-
-登録後、Claude Code で:
-
-```
-「Datadogをセットアップして」       → datadog_setup ツール
-「セッションの状態を確認して」       → datadog_status ツール
-「前回の失敗を再実行して」          → datadog_resume ツール
-「作成したリソースを削除して」       → datadog_rollback ツール
-```
-
-### Datadog API を自然言語で操作
-
-既存の Datadog 環境を Claude Code から操作する場合:
-
-```bash
-export DD_API_KEY="あなたのAPIキー"
-export DD_APP_KEY="あなたのApplicationキー"
 npx datadog-connect mcp
 ```
 
-接続後:
+これだけで Claude Code と Datadog が繋がります。
+
+### Step 3: AI に話しかける
+
+Claude Code を開いて、日本語で指示するだけ：
 
 ```
-「直近のアラートを確認して」
-「CPU使用率が高いホストを調べて」
-「本番環境のエラーログを検索して」
+「Datadog をセットアップして」
 ```
 
-## 環境変数
+AI が環境を自動判別して、最適な設定プランを提案してくれます。
 
-毎回キーを入力するのが面倒な場合:
+---
 
+## 主な機能
+
+### 1. ガイド付きセットアップ
+
+環境（AWS / GCP / Azure / Kubernetes など）を自動で検出して、最適な監視設定プランを提案。
+
+**対応環境:**
+- AWS（EC2, RDS, Lambda, ECS など）
+- Google Cloud（GCE, GKE, Cloud Run など）
+- Azure（VM, AKS, App Service など）
+- Kubernetes（Helm / Operator）
+- オンプレミス・VPS（Xserver 含む）
+
+### 2. 監視ベストプラクティス
+
+あなたのシステム構成に合わせて、「何を監視すべきか」を自動で提案：
+
+- **アラート設定** — CPU、メモリ、ディスク、エラー率など 25 種類以上
+- **ダッシュボード** — インフラ概要、APM、ログ分析など 5 種類
+- **ログ管理** — Nginx / Apache / アプリログの自動パイプライン
+- **セキュリティ** — 不正アクセス検知、脆弱性スキャン、WAF
+
+### 3. 障害対応サポート
+
+問題が起きたとき、AI が調査を手伝います：
+
+```
+「API のレスポンスが遅い原因を調べて」
+→ メトリクス・ログ・トレースを横断的に分析
+→ 原因の候補と対応手順を提示
+→ 再発防止のアラート設定を提案
+```
+
+### 4. 監視の最適化
+
+既存の設定を見直して改善ポイントを提案：
+
+- 鳴りすぎてるアラートの検出
+- 監視カバレッジの穴の発見
+- ログのコスト削減提案
+
+---
+
+## コマンド一覧
+
+ターミナルから直接使うこともできます：
+
+| コマンド | 説明 |
+|---------|------|
+| `npx datadog-connect setup` | 対話形式でセットアップ |
+| `npx datadog-connect plan` | 設定プランを生成して表示 |
+| `npx datadog-connect resume` | 前回の途中から再開 |
+| `npx datadog-connect rollback` | 作成した設定を元に戻す |
+| `npx datadog-connect mcp` | Claude Code と Datadog を接続 |
+
+---
+
+## 仕組み
+
+```
+┌──────────────────────────────────────────────┐
+│  あなた（自然言語で指示）                       │
+│  「AWS の監視をセットアップして」                │
+└──────────────┬───────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────┐
+│  Claude Code + Datadog Connect               │
+│                                              │
+│  ┌─────────────┐  ┌──────────────────────┐   │
+│  │ Knowledge   │  │ Plan Builder         │   │
+│  │ (16モジュール │  │ (最適な手順を        │   │
+│  │  の設定知識) │  │  自動で組み立て)     │   │
+│  └─────────────┘  └──────────────────────┘   │
+└──────────────┬───────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────┐
+│  公式 Datadog MCP                            │
+│  (実際の API 操作を安全に実行)                 │
+└──────────────┬───────────────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────────────────┐
+│  Datadog                                     │
+│  (ダッシュボード・アラート・ログが設定される)    │
+└──────────────────────────────────────────────┘
+```
+
+**ポイント:**
+- このツールが Datadog に直接アクセスすることはありません
+- 公式の安全な経路（Datadog MCP）を通じて操作します
+- API キーはツール内に保存されません
+
+---
+
+## 対応するセットアップ項目（16 モジュール）
+
+<details>
+<summary>クラウド連携（6 種類）</summary>
+
+| 項目 | 内容 |
+|------|------|
+| AWS | IAM ロール作成 + CloudWatch 連携 |
+| Google Cloud | サービスアカウント + Workload Identity |
+| Azure | Reader ロール + サブスクリプション連携 |
+| Kubernetes | Helm / Operator での Agent デプロイ |
+| オンプレミス | Linux / Windows への Agent インストール |
+| Xserver | VPS・専用サーバーの監視設定 |
+
+</details>
+
+<details>
+<summary>監視機能（5 種類）</summary>
+
+| 項目 | 内容 |
+|------|------|
+| APM | アプリケーション性能監視（7 言語対応） |
+| ログ管理 | ログ収集パイプラインの自動設定 |
+| ダッシュボード | 5 種類のプリセットダッシュボード |
+| アラート | 25 種類以上のモニター定義 |
+| 外形監視 | API テストの自動作成 |
+
+</details>
+
+<details>
+<summary>セキュリティ（5 種類）</summary>
+
+| 項目 | 内容 |
+|------|------|
+| CSPM | クラウドセキュリティ態勢管理 |
+| CWS | ワークロード保護 |
+| ASM | Web アプリケーション保護（WAF） |
+| SIEM | セキュリティログ分析 |
+| 機密データ | PII・クレジットカード番号の自動検出 |
+
+</details>
+
+---
+
+## よくある質問
+
+<details>
+<summary>Q: Datadog のアカウントは必要ですか？</summary>
+
+はい。[Datadog](https://www.datadoghq.com/) のアカウントと API キーが必要です。無料トライアルでも利用できます。
+</details>
+
+<details>
+<summary>Q: 料金はかかりますか？</summary>
+
+Datadog Connect 自体は**無料**（MIT ライセンス）です。Datadog の利用料金は別途発生します。
+</details>
+
+<details>
+<summary>Q: セキュリティは大丈夫ですか？</summary>
+
+- API キーはツール内に保存されません
+- すべての操作は公式 Datadog MCP を経由します
+- セキュリティルールは「検出のみ」モードで作成（ブロックしない）
+- 作成した設定はいつでもロールバック（元に戻す）できます
+</details>
+
+<details>
+<summary>Q: 設定を間違えたらどうなりますか？</summary>
+
+`npx datadog-connect rollback` で、このツールが作成した設定をまとめて元に戻せます。手動で Datadog を操作する必要はありません。
+</details>
+
+<details>
+<summary>Q: npx が使えません</summary>
+
+Node.js v20 以上をインストールしてください。Mac の場合:
 ```bash
-export DD_API_KEY="あなたのAPIキー"
-export DD_APP_KEY="あなたのApplicationキー"
-export DD_SITE="ap1.datadoghq.com"  # オプション（デフォルト: datadoghq.com）
-npx datadog-connect setup
+brew install node
+```
+</details>
+
+<details>
+<summary>Q: 途中でエラーになりました</summary>
+
+`npx datadog-connect resume` で、成功したところから続行できます。最初からやり直す必要はありません。
+</details>
+
+---
+
+## 動作環境
+
+- **Node.js** 20 以上
+- **Claude Code**（[公式サイト](https://claude.ai/code)）
+- **Datadog アカウント** + API キー
+
+---
+
+## 開発者向け情報
+
+<details>
+<summary>技術詳細（クリックで展開）</summary>
+
+### Tech Stack
+- TypeScript + tsup (ESM)
+- Commander.js (CLI)
+- Zod (入力バリデーション)
+- Playwright (オプション: ブラウザ自動化)
+
+### Architecture
+```
+src/
+  knowledge/     — 16モジュールのドメイン知識（純粋データ）
+  orchestrator/  — MCP呼び出しプラン生成エンジン
+  modules/       — cloud(6) + feature(5) + security(5)
+  state/         — セッション永続化 + リソースジャーナル
+  browser/       — Playwright ブラウザ自動化（オプション）
+skills/          — Claude Code スキル定義（5スキル）
 ```
 
-## トラブルシューティング
+### Security Design
+- State directory: `0o700`, files: `0o600`
+- Credentials sanitized before session persistence
+- API keys passed via process env (not command args)
+- PowerShell/YAML injection protection in generated scripts
+- ASM/WAF rules created in monitor-only mode
 
-| 問題 | 解決方法 |
-|------|---------|
-| npx が見つからない | `export PATH="$(find $HOME/.nvm/versions/node -maxdepth 1 -type d 2>/dev/null \| sort -V \| tail -1)/bin:$HOME/.volta/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"` を先に実行 |
-| 認証エラー | API Key と Application Key が正しいか確認。3回まで再入力可 |
-| サイトの選び方 | ログインURLで判別: `app.datadoghq.com` → US1、`ap1.datadoghq.com` → AP1 |
-| 機能がスキップされた | Datadog プランで利用できない機能は自動スキップ |
-| 途中で止まった | `npx datadog-connect resume` で失敗モジュールだけ再実行 |
-| 設定を元に戻したい | `npx datadog-connect rollback` で作成リソースを削除 |
-| ブラウザ自動取得の失敗 | 手動入力に自動で切り替わります |
+### Build & Test
+```bash
+npm run typecheck   # TypeScript 型チェック
+npm run build       # tsup ビルド
+```
 
-## Security Design
+</details>
 
-- **Preflight**: セキュリティモジュールは実行前にAPIプローブでプラン確認。非対応なら自動スキップ
-- **Monitor Mode**: ASM/WAF ルールは monitor モード（検出のみ、ブロックしない）で作成
-- **Shell Escape**: 全スクリプト生成でユーザー入力をシェルエスケープ (`escapeShellArg`)
-- **Secure Output**: ファイル出力は `~/.datadog-connect/output/` に `0o600`/`0o700` で保存
-- **Credential Safety**: 認証情報はセッションファイルから除去 (`sanitizeConfig`)
-- **Browser Safety**: ブラウザ操作は常に画面表示（ヘッドレスにしない）、取得値はバリデーション後に使用
-- **Rollback**: 作成リソースをジャーナルに記録、`rollback` コマンドで削除可能
+---
 
-## Tech Stack
+## ライセンス
 
-- TypeScript + tsx
-- Commander (CLI)
-- @inquirer/prompts (対話)
-- @datadog/datadog-api-client (API)
-- Playwright (ブラウザ自動化、optional)
-- Zod (バリデーション)
-- tsup (ビルド)
-
-## License
-
-MIT
+MIT License - [Isle and Roots Inc.](https://github.com/isle-and-roots)

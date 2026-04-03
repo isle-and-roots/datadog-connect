@@ -3,29 +3,9 @@ import { BaseModule } from "../base-module.js";
 import { registerModule } from "../registry.js";
 import { RESOURCE_PREFIX } from "../../config/constants.js";
 import { printSuccess } from "../../utils/prompts.js";
-import { v1 } from "@datadog/datadog-api-client";
+import { LOG_SOURCES, RETENTION_OPTIONS, LOG_PIPELINE_DEFS } from "../../knowledge/apm-guides.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
-import type { DatadogClient } from "../../client/datadog-client.js";
-
-const LOG_SOURCES = [
-  { value: "application", name: "アプリケーションログ" },
-  { value: "nginx", name: "Nginx" },
-  { value: "apache", name: "Apache" },
-  { value: "docker", name: "Docker / コンテナ" },
-  { value: "syslog", name: "Syslog" },
-  { value: "json", name: "JSON形式ログ" },
-  { value: "custom", name: "カスタム形式" },
-];
-
-const RETENTION_OPTIONS = [
-  { value: 3, name: "3日" },
-  { value: 7, name: "7日" },
-  { value: 15, name: "15日 (推奨)" },
-  { value: 30, name: "30日" },
-  { value: 90, name: "90日" },
-  { value: 180, name: "180日" },
-  { value: 360, name: "360日" },
-];
+import type { ModulePlan, McpToolCall } from "../../orchestrator/mcp-call.js";
 
 interface LogsConfig extends ModuleConfig {
   sources: string[];
@@ -40,6 +20,48 @@ class LogsModule extends BaseModule {
   readonly description = "ログパイプライン・インデックスを設定";
   readonly category = "feature" as const;
   readonly dependencies: string[] = [];
+
+  plan(config: ModuleConfig): ModulePlan {
+    const cfg = config as LogsConfig;
+    const calls: McpToolCall[] = [];
+
+    for (const source of cfg.sources ?? []) {
+      const pipelineDef = LOG_PIPELINE_DEFS[source as keyof typeof LOG_PIPELINE_DEFS] ?? null;
+      if (!pipelineDef) continue;
+
+      const pipelineName = `${RESOURCE_PREFIX} ${pipelineDef.name}`;
+      calls.push({
+        tool: "datadog_create_logs_pipeline",
+        parameters: {
+          name: pipelineName,
+          is_enabled: true,
+          filter: { query: pipelineDef.filterQuery },
+          processors: pipelineDef.processors,
+        },
+        description: `ログパイプライン「${pipelineDef.name}」を作成`,
+        rollbackCall: {
+          tool: "datadog_delete_logs_pipeline",
+          parameters: { pipeline_id: "{{created_id}}" },
+          description: `ログパイプライン「${pipelineDef.name}」を削除`,
+        },
+      });
+    }
+
+    return {
+      moduleId: this.id,
+      moduleName: this.name,
+      category: this.category,
+      calls,
+      manualSteps: [],
+      verificationCalls: [
+        {
+          tool: "datadog_list_logs_pipelines",
+          parameters: {},
+          description: "ログパイプライン一覧を取得して作成確認",
+        },
+      ],
+    };
+  }
 
   async prompt(): Promise<LogsConfig> {
     const sources = await checkbox({
@@ -66,22 +88,22 @@ class LogsModule extends BaseModule {
     return { sources, retentionDays, enableAnomaly, enableSensitiveData };
   }
 
-  async execute(config: LogsConfig, client: DatadogClient): Promise<ExecutionResult> {
+  async execute(config: LogsConfig, client: unknown): Promise<ExecutionResult> {
     const resources = [];
     const errors = [];
 
     // Create log pipelines for each source
     for (const source of config.sources) {
-      const pipelineDef = getPipelineDefinition(source);
+      const pipelineDef = LOG_PIPELINE_DEFS[source as keyof typeof LOG_PIPELINE_DEFS] ?? null;
       if (!pipelineDef) continue;
 
       try {
-        const resp = await client.v1.logsPipelines.createLogsPipeline({
+        const resp = await (client as any).v1.logsPipelines.createLogsPipeline({
           body: {
             name: `${RESOURCE_PREFIX} ${pipelineDef.name}`,
             isEnabled: true,
             filter: { query: pipelineDef.filterQuery },
-            processors: pipelineDef.processors as unknown as v1.LogsProcessor[],
+            processors: pipelineDef.processors as unknown[],
           },
         });
 
@@ -102,11 +124,11 @@ class LogsModule extends BaseModule {
     return { success: errors.length === 0, resources, manualSteps: [], errors };
   }
 
-  async verify(client: DatadogClient): Promise<VerificationResult> {
+  async verify(client: unknown): Promise<VerificationResult> {
     const checks = [];
     try {
-      const pipelines = await client.v1.logsPipelines.listLogsPipelines();
-      const managed = pipelines.filter((p) =>
+      const pipelines = await (client as any).v1.logsPipelines.listLogsPipelines();
+      const managed = pipelines.filter((p: any) =>
         p.name?.startsWith(RESOURCE_PREFIX)
       );
       checks.push({
@@ -123,113 +145,6 @@ class LogsModule extends BaseModule {
     }
     return { success: checks.every((c) => c.passed), checks };
   }
-}
-
-interface PipelineDef {
-  name: string;
-  filterQuery: string;
-  processors: Array<Record<string, unknown>>;
-}
-
-function getPipelineDefinition(source: string): PipelineDef | null {
-  const defs: Record<string, PipelineDef> = {
-    nginx: {
-      name: "Nginx Access Logs",
-      filterQuery: "source:nginx",
-      processors: [
-        {
-          type: "grok-parser",
-          name: "Nginx Access Log Parser",
-          isEnabled: true,
-          source: "message",
-          samples: [],
-          grok: {
-            matchRules:
-              'access.common %{_client_ip} %{_ident} %{_auth} \\[%{_date_access}\\] "(?>%{_method} |)%{_url}(?> %{_version}|)" %{_status_code} (?>%{_bytes_written}|-)',
-            supportRules: "",
-          },
-        },
-        {
-          type: "status-remapper",
-          name: "Status Remapper",
-          isEnabled: true,
-          sources: ["http.status_code"],
-        },
-      ],
-    },
-    apache: {
-      name: "Apache Access Logs",
-      filterQuery: "source:apache",
-      processors: [
-        {
-          type: "grok-parser",
-          name: "Apache Access Log Parser",
-          isEnabled: true,
-          source: "message",
-          samples: [],
-          grok: {
-            matchRules:
-              'access.common %{_client_ip} %{_ident} %{_auth} \\[%{_date_access}\\] "(?>%{_method} |)%{_url}(?> %{_version}|)" %{_status_code} (?>%{_bytes_written}|-)',
-            supportRules: "",
-          },
-        },
-      ],
-    },
-    json: {
-      name: "JSON Application Logs",
-      filterQuery: "source:application @type:json",
-      processors: [
-        {
-          type: "attribute-remapper",
-          name: "Level Remapper",
-          isEnabled: true,
-          sources: ["level", "severity", "log_level"],
-          target: "status",
-          preserveSource: true,
-          overrideOnConflict: false,
-          sourceType: "attribute",
-          targetType: "attribute",
-        },
-        {
-          type: "date-remapper",
-          name: "Date Remapper",
-          isEnabled: true,
-          sources: ["timestamp", "date", "time", "@timestamp"],
-        },
-      ],
-    },
-    syslog: {
-      name: "Syslog",
-      filterQuery: "source:syslog",
-      processors: [
-        {
-          type: "grok-parser",
-          name: "Syslog Parser",
-          isEnabled: true,
-          source: "message",
-          samples: [],
-          grok: {
-            matchRules: "syslog %{date(\"MMM dd HH:mm:ss\"):date} %{word:host} %{word:program}(\\[%{number:pid}\\])?: %{data:message}",
-            supportRules: "",
-          },
-        },
-      ],
-    },
-    application: {
-      name: "Application Logs",
-      filterQuery: "source:application",
-      processors: [
-        {
-          type: "status-remapper",
-          name: "Status Remapper",
-          isEnabled: true,
-          sources: ["level", "severity", "status"],
-        },
-      ],
-    },
-  };
-
-  return defs[source] ?? null;
 }
 
 registerModule(new LogsModule());

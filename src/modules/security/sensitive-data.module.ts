@@ -3,32 +3,26 @@ import { BaseModule } from "../base-module.js";
 import { registerModule } from "../registry.js";
 import { RESOURCE_PREFIX } from "../../config/constants.js";
 import { printSuccess } from "../../utils/prompts.js";
+import {
+  SENSITIVE_DATA_PATTERNS,
+  SENSITIVE_DATA_ACTIONS,
+  SENSITIVE_DATA_ACTION_TYPE_MAP,
+  SENSITIVE_DATA_MASK_REPLACEMENT,
+  SENSITIVE_DATA_PRODUCT_LIST,
+  SENSITIVE_DATA_DEFAULT_FILTER_QUERY,
+} from "../../knowledge/security-rules.js";
 import type {
   ModuleConfig,
   ExecutionResult,
   VerificationResult,
   PreflightResult,
 } from "../../config/types.js";
-import type { DatadogClient } from "../../client/datadog-client.js";
+import type { McpToolCall, ModulePlan } from "../../orchestrator/mcp-call.js";
 
-// ── アクションマッピング ──
-
-const ACTION_TYPE_MAP: Record<string, string> = {
-  mask: "replacement_string",
-  hash: "hash",
-  notify: "none",
-};
-
-// ── パターンキーワードマッチング ──
-// 標準パターンの name フィールドで部分一致を試みる
-
-const PATTERN_KEYWORDS: Record<string, string[]> = {
-  pii: ["name", "address", "my number", "マイナンバー", "個人", "住所", "氏名"],
-  "credit-card": ["credit card", "visa", "mastercard", "card number", "クレジット"],
-  "api-key": ["api key", "api token", "access token", "secret key", "トークン"],
-  email: ["email", "e-mail", "メール"],
-  phone: ["phone", "telephone", "電話"],
-};
+const ACTION_TYPE_MAP = SENSITIVE_DATA_ACTION_TYPE_MAP as Record<string, string>;
+const PATTERN_KEYWORDS: Record<string, string[]> = Object.fromEntries(
+  SENSITIVE_DATA_PATTERNS.map((p) => [p.value, p.matchKeywords as string[]])
+);
 
 interface SensitiveDataConfig extends ModuleConfig {
   patterns: string[];
@@ -42,9 +36,9 @@ class SensitiveDataModule extends BaseModule {
   readonly category = "security" as const;
   readonly dependencies: string[] = ["logs"];
 
-  async preflight(client: DatadogClient): Promise<PreflightResult> {
+  async preflight(client: unknown): Promise<PreflightResult> {
     try {
-      await client.security.sensitiveData.listScanningGroups();
+      await (client as any).security.sensitiveData.listScanningGroups();
       return { available: true };
     } catch {
       return {
@@ -55,45 +49,117 @@ class SensitiveDataModule extends BaseModule {
     }
   }
 
+  plan(config: ModuleConfig): ModulePlan {
+    const cfg = config as SensitiveDataConfig;
+    const calls: McpToolCall[] = [];
+
+    const patterns = cfg.patterns ?? [];
+    const actionType = cfg.actionType ?? "mask";
+
+    const textReplacementType = ACTION_TYPE_MAP[actionType] ?? "none";
+
+    // Build pattern definitions lookup for fallback regex
+    const patternDefs = Object.fromEntries(
+      SENSITIVE_DATA_PATTERNS.map((p) => [p.value, p])
+    );
+
+    // Step 1: Create scanning group
+    const groupName = `${RESOURCE_PREFIX} Sensitive Data Scanner`;
+    const groupCallId = "create_scanning_group";
+
+    calls.push({
+      id: groupCallId,
+      tool: "datadog_create_sensitive_data_scanning_group",
+      parameters: {
+        name: groupName,
+        description: "Managed by datadog-connect",
+        is_enabled: true,
+        product_list: [...SENSITIVE_DATA_PRODUCT_LIST],
+        filter: {
+          query: SENSITIVE_DATA_DEFAULT_FILTER_QUERY,
+        },
+      },
+      description: `Sensitive Data Scannerグループ「${groupName}」を作成`,
+      rollbackCall: {
+        tool: "datadog_delete_sensitive_data_scanning_group",
+        parameters: { group_id: "{{created_id}}" },
+        description: `スキャニンググループ「${groupName}」を削除`,
+      },
+    });
+
+    // Step 2: Create scanning rules for each selected pattern
+    for (const patternKey of patterns) {
+      const patternDef = patternDefs[patternKey];
+      const ruleName = `${RESOURCE_PREFIX} ${patternKey}`;
+
+      const textReplacement: Record<string, unknown> = {
+        type: textReplacementType,
+      };
+      if (textReplacementType === "replacement_string") {
+        textReplacement["replacement_string"] = SENSITIVE_DATA_MASK_REPLACEMENT;
+      }
+
+      const ruleParameters: Record<string, unknown> = {
+        name: ruleName,
+        description: `Managed by datadog-connect: ${patternKey}`,
+        is_enabled: true,
+        tags: ["managed:datadog-connect"],
+        text_replacement: textReplacement,
+        group_id: "<GROUP_ID: ステップ1のレスポンスから取得>",
+      };
+
+      // Use fallback regex pattern; standard pattern matched at runtime
+      if (patternDef?.fallbackRegex) {
+        ruleParameters["pattern"] = patternDef.fallbackRegex;
+      }
+
+      // Include keyword hints for standard pattern matching at execution time
+      if (patternDef?.matchKeywords) {
+        ruleParameters["match_keywords"] = patternDef.matchKeywords;
+      }
+
+      calls.push({
+        tool: "datadog_create_sensitive_data_scanning_rule",
+        parameters: ruleParameters,
+        description: `スキャニングルール「${patternKey}」を作成`,
+        dependsOn: [groupCallId],
+        rollbackCall: {
+          tool: "datadog_delete_sensitive_data_scanning_rule",
+          parameters: { rule_id: "{{created_id}}" },
+          description: `スキャニングルール「${ruleName}」を削除`,
+        },
+      });
+    }
+
+    return {
+      moduleId: this.id,
+      moduleName: this.name,
+      category: this.category,
+      calls,
+      manualSteps: [],
+      verificationCalls: [
+        {
+          tool: "datadog_list_sensitive_data_scanning_groups",
+          parameters: {},
+          description: "スキャニンググループとルールの一覧を取得して作成確認",
+        },
+      ],
+    };
+  }
+
   async prompt(): Promise<SensitiveDataConfig> {
     const patterns = await checkbox({
       message: "検出するパターンを選択:",
-      choices: [
-        {
-          value: "pii",
-          name: "個人情報 (氏名, 住所, マイナンバー)",
-          checked: true,
-        },
-        {
-          value: "credit-card",
-          name: "クレジットカード番号",
-          checked: true,
-        },
-        {
-          value: "api-key",
-          name: "APIキー・トークン",
-          checked: true,
-        },
-        {
-          value: "email",
-          name: "メールアドレス",
-          checked: false,
-        },
-        {
-          value: "phone",
-          name: "電話番号",
-          checked: false,
-        },
-      ],
+      choices: SENSITIVE_DATA_PATTERNS.map((p) => ({
+        value: p.value,
+        name: p.name,
+        checked: p.defaultChecked,
+      })),
     });
 
     const actionType = await select({
       message: "検出時のアクション:",
-      choices: [
-        { value: "mask", name: "マスク" },
-        { value: "hash", name: "ハッシュ化" },
-        { value: "notify", name: "通知のみ" },
-      ],
+      choices: SENSITIVE_DATA_ACTIONS.map((a) => ({ value: a.value, name: a.name })),
     });
 
     return { patterns, actionType };
@@ -101,7 +167,7 @@ class SensitiveDataModule extends BaseModule {
 
   async execute(
     config: SensitiveDataConfig,
-    client: DatadogClient
+    client: unknown
   ): Promise<ExecutionResult> {
     const resources = [];
     const errors = [];
@@ -110,7 +176,7 @@ class SensitiveDataModule extends BaseModule {
     let standardPatterns: Array<{ id?: string; attributes?: { name?: string } }> =
       [];
     try {
-      const stdResp = await client.security.sensitiveData.listStandardPatterns();
+      const stdResp = await (client as any).security.sensitiveData.listStandardPatterns();
       standardPatterns =
         (
           stdResp as unknown as {
@@ -128,7 +194,7 @@ class SensitiveDataModule extends BaseModule {
     let groupId: string | undefined;
 
     try {
-      const groupResp = await client.security.sensitiveData.createScanningGroup({
+      const groupResp = await (client as any).security.sensitiveData.createScanningGroup({
         body: {
           data: {
             type: "sensitive_data_scanner_group",
@@ -145,9 +211,7 @@ class SensitiveDataModule extends BaseModule {
           meta: {
             version: 0,
           },
-        } as unknown as Parameters<
-          typeof client.security.sensitiveData.createScanningGroup
-        >[0]["body"],
+        } as unknown as any,
       });
 
       const groupData = (
@@ -204,7 +268,7 @@ class SensitiveDataModule extends BaseModule {
             textReplacement: {
               type: textReplacementType,
               ...(textReplacementType === "replacement_string"
-                ? { replacementString: "****" }
+                ? { replacementString: SENSITIVE_DATA_MASK_REPLACEMENT }
                 : {}),
             },
           },
@@ -232,25 +296,19 @@ class SensitiveDataModule extends BaseModule {
 
         // 標準パターンが見つからない場合は正規表現パターンを付与
         if (!matchedPattern?.id) {
-          const fallbackPatterns: Record<string, string> = {
-            pii: "\\b[\\p{L}\\p{M}]+\\s+[\\p{L}\\p{M}]+\\b",
-            "credit-card": "\\b(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13})\\b",
-            "api-key": "(?i)(?:api[_-]?key|token|secret)[\"'\\s]*[:=][\"'\\s]*[\\w\\-]{16,}",
-            email: "\\b[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}\\b",
-            phone: "\\b(?:\\+81|0)[\\-\\s]?\\d{1,4}[\\-\\s]?\\d{1,4}[\\-\\s]?\\d{4}\\b",
-          };
+          const fallbackPatterns: Record<string, string> = Object.fromEntries(
+            SENSITIVE_DATA_PATTERNS.map((p) => [p.value, p.fallbackRegex])
+          );
           (ruleBody["attributes"] as Record<string, unknown>)["pattern"] =
             fallbackPatterns[patternKey] ?? patternKey;
         }
 
-        const ruleResp = await client.security.sensitiveData.createScanningRule(
+        const ruleResp = await (client as any).security.sensitiveData.createScanningRule(
           {
             body: {
               data: ruleBody,
               meta: { version: 0 },
-            } as unknown as Parameters<
-              typeof client.security.sensitiveData.createScanningRule
-            >[0]["body"],
+            } as unknown as any,
           }
         );
 
@@ -287,10 +345,10 @@ class SensitiveDataModule extends BaseModule {
     };
   }
 
-  async verify(client: DatadogClient): Promise<VerificationResult> {
+  async verify(client: unknown): Promise<VerificationResult> {
     const checks = [];
     try {
-      const resp = await client.security.sensitiveData.listScanningGroups();
+      const resp = await (client as any).security.sensitiveData.listScanningGroups();
       const included =
         (
           resp as unknown as {

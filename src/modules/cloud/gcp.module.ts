@@ -4,9 +4,13 @@ import { registerModule } from "../registry.js";
 import { promptTags } from "../shared/tags.js";
 import { printManual, printInfo } from "../../utils/prompts.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
-import type { DatadogClient } from "../../client/datadog-client.js";
+import type { ModulePlan, McpToolCall } from "../../orchestrator/mcp-call.js";
 import { writeExecutableFile, getSecureOutputDir } from "../../utils/secure-write.js";
 import { escapeShellArg, validateGcpProjectId } from "../../utils/validators.js";
+import {
+  GCP_REQUIRED_ROLES,
+  generateGcpSetupScript,
+} from "../../knowledge/cloud-configs.js";
 import { getBrowserController } from "../../browser/browser-controller.js";
 import { fetchGcpProjectId as fetchGcpProjectIdFromBrowser } from "../../browser/cloud-browser.js";
 
@@ -97,13 +101,91 @@ class GcpModule extends BaseModule {
     return { projectId, serviceAccountEmail, automute, tags };
   }
 
-  async execute(config: GcpConfig, client: DatadogClient): Promise<ExecutionResult> {
+  plan(config: ModuleConfig): ModulePlan {
+    const gcpConfig = config as GcpConfig;
+    const calls: McpToolCall[] = [];
+    const verificationCalls: McpToolCall[] = [];
+
+    const projectId = gcpConfig.projectId ?? "<GCP_PROJECT_ID>";
+    const serviceAccountEmail =
+      gcpConfig.serviceAccountEmail ??
+      `datadog-integration@${projectId}.iam.gserviceaccount.com`;
+    const automute = gcpConfig.automute ?? true;
+    const tags = gcpConfig.tags ?? [];
+
+    // Step 1: Register GCP STS account in Datadog (Workload Identity Federation / keyless auth)
+    calls.push({
+      id: "create_gcp_sts_account",
+      tool: "datadog_create_gcp_sts_integration",
+      parameters: {
+        client_email: serviceAccountEmail,
+        automute,
+        host_filters: tags.length > 0 ? tags : undefined,
+      },
+      description: `GCP サービスアカウント ${serviceAccountEmail} を Datadog STS 統合として登録`,
+    });
+
+    // Manual steps: gcloud commands to create SA and bind IAM roles
+    const setupScript = generateGcpSetupScript(projectId, serviceAccountEmail, automute, tags);
+    const manualSteps = [
+      {
+        title: "GCP サービスアカウントを作成・ロール付与",
+        description:
+          "以下の gcloud コマンドを実行して、Datadog 統合用のサービスアカウントを作成し" +
+          `必要な IAM ロール (${GCP_REQUIRED_ROLES.join(", ")}) を付与してください。`,
+        commands: [
+          `# スクリプトに実行権限を付与してから実行`,
+          `chmod +x gcp-setup.sh`,
+          `./gcp-setup.sh`,
+        ],
+        outputFile: "gcp-setup.sh",
+      },
+      {
+        title: "GCP セットアップスクリプト内容",
+        description: setupScript,
+      },
+      {
+        title: "Workload Identity Federation (WIF) の設定",
+        description:
+          "Datadog コンソール (Integrations > Google Cloud Platform) で " +
+          "'Add GCP Account' → 'Service Account Impersonation' を選択し、" +
+          "表示される Pool 情報を使って WIF を設定してください。",
+        commands: [
+          `# Datadog コンソールで Pool Provider 情報を取得後に実行`,
+          `gcloud iam service-accounts add-iam-policy-binding ${serviceAccountEmail} \\`,
+          `  --project=${projectId} \\`,
+          `  --role=roles/iam.workloadIdentityUser \\`,
+          `  --member="principalSet://iam.googleapis.com/projects/${projectId}/locations/global/workloadIdentityPools/datadog-pool/*"`,
+        ],
+      },
+    ];
+
+    // Verification: list GCP STS accounts
+    verificationCalls.push({
+      id: "verify_gcp_sts_account",
+      tool: "datadog_list_gcp_sts_integrations",
+      parameters: {},
+      description: `GCP STS 統合一覧を取得して ${projectId} が登録されているか確認`,
+      dependsOn: ["create_gcp_sts_account"],
+    });
+
+    return {
+      moduleId: this.id,
+      moduleName: this.name,
+      category: this.category,
+      calls,
+      manualSteps,
+      verificationCalls,
+    };
+  }
+
+  async execute(config: GcpConfig, client: unknown): Promise<ExecutionResult> {
     const resources = [];
     const manualSteps = [];
     const errors = [];
 
     try {
-      await client.v2.gcp.createGCPSTSAccount({
+      await (client as any).v2.gcp.createGCPSTSAccount({
         body: {
           data: {
             type: "gcp_service_account",
@@ -148,10 +230,10 @@ class GcpModule extends BaseModule {
     return { success: errors.length === 0, resources, manualSteps, errors };
   }
 
-  async verify(client: DatadogClient): Promise<VerificationResult> {
+  async verify(client: unknown): Promise<VerificationResult> {
     const checks = [];
     try {
-      const resp = await client.v2.gcp.listGCPSTSAccounts();
+      const resp = await (client as any).v2.gcp.listGCPSTSAccounts();
       const accounts = resp.data ?? [];
 
       const targetProjectId = this.createdResources[0]?.id;
@@ -160,7 +242,7 @@ class GcpModule extends BaseModule {
 
       if (targetProjectId) {
         // clientEmail の @project-id. 部分で照合（API公式フィールド）
-        found = accounts.some((a) => {
+        found = accounts.some((a: any) => {
           const attrs = (a as unknown as { attributes?: { clientEmail?: string } }).attributes;
           const email = attrs?.clientEmail ?? "";
           return email.includes(`@${targetProjectId}.iam.gserviceaccount.com`);

@@ -3,18 +3,20 @@ import { BaseModule } from "../base-module.js";
 import { registerModule } from "../registry.js";
 import { promptTags } from "../shared/tags.js";
 import { printManual, printInfo, printSuccess } from "../../utils/prompts.js";
+import {
+  XSERVER_TYPES,
+  XSERVER_FIREWALL_RULES,
+  XSERVER_NGINX_CONFIG,
+  XSERVER_MYSQL_CONFIG,
+  XSERVER_MYSQL_GRANTS,
+  generateXserverInstallScript,
+} from "../../knowledge/cloud-configs.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
-import type { DatadogClient } from "../../client/datadog-client.js";
+import type { ModulePlan, McpToolCall } from "../../orchestrator/mcp-call.js";
 import { writeSecureFile, writeExecutableFile, getSecureOutputDir } from "../../utils/secure-write.js";
 import { escapeShellArg } from "../../utils/validators.js";
 import { getBrowserController } from "../../browser/browser-controller.js";
 import { authenticateXserver, fetchXserverVpsList, configureXserverFirewall } from "../../browser/xserver-browser.js";
-
-const XSERVER_TYPES = [
-  { value: "vps", name: "Xserver VPS" },
-  { value: "dedicated", name: "Xserver 専用サーバー" },
-  { value: "business", name: "Xserver Business (SSH可)" },
-];
 
 interface XserverConfig extends ModuleConfig {
   serverType: string;
@@ -139,12 +141,127 @@ class XserverModule extends BaseModule {
     return { serverType, host, port, user, enableProcess, enableNginx, enableMysql, tags, usedBrowser, vpsId };
   }
 
+  plan(config: ModuleConfig): ModulePlan {
+    const xsConfig = config as XserverConfig;
+    const calls: McpToolCall[] = [];
+    const verificationCalls: McpToolCall[] = [];
+
+    const serverType = xsConfig.serverType ?? "vps";
+    const host = xsConfig.host ?? "<XSERVER_HOST>";
+    const port = xsConfig.port ?? 22;
+    const user = xsConfig.user ?? "root";
+    const tags = xsConfig.tags ?? [];
+    const enableProcess = xsConfig.enableProcess ?? true;
+    const enableNginx = xsConfig.enableNginx ?? false;
+    const enableMysql = xsConfig.enableMysql ?? false;
+
+    const flags = { enableProcess, enableNginx, enableMysql };
+
+    // Xserver setup is entirely manual (SSH-based agent install on VPS/dedicated server)
+    const manualSteps = [];
+
+    // Install script
+    const installScript = generateXserverInstallScript(serverType, host, tags, flags);
+    manualSteps.push({
+      title: `Xserver (${serverType}) に Datadog Agent をインストール`,
+      description:
+        `SSH 経由でホスト ${host} に Datadog Agent をインストールします。` +
+        "<YOUR_DD_API_KEY> を実際の API キーに置き換えてください。",
+      commands: [
+        `# ローカルから SSH 経由で実行`,
+        `ssh -p ${port} ${user}@${host} 'bash -s' < xserver-install.sh`,
+        ``,
+        `# または直接サーバーにログインして実行`,
+        `ssh -p ${port} ${user}@${host}`,
+        `bash xserver-install.sh`,
+      ],
+      outputFile: "xserver-install.sh",
+    });
+    manualSteps.push({
+      title: "Xserver インストールスクリプト内容",
+      description: installScript,
+    });
+
+    // Firewall configuration
+    const firewallRulesSummary = XSERVER_FIREWALL_RULES
+      .map((r) => `${r.protocol} ${r.port} → ${r.destination} (${r.description})`)
+      .join("\n");
+    manualSteps.push({
+      title: "Xserver ファイアウォール設定",
+      description:
+        "Xserver 管理画面のファイアウォール設定で以下のアウトバウンドルールを追加してください:\n" +
+        firewallRulesSummary,
+      commands: [
+        `# iptables を使う場合:`,
+        `iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT`,
+      ],
+    });
+
+    // Nginx integration config
+    if (enableNginx) {
+      manualSteps.push({
+        title: "Nginx 監視設定",
+        description:
+          "/etc/datadog-agent/conf.d/nginx.d/conf.yaml に以下の内容を配置してください。" +
+          "Nginx の stub_status が有効になっている必要があります。",
+        outputFile: "nginx.d-conf.yaml",
+      });
+      manualSteps.push({
+        title: "Nginx 監視設定ファイル内容",
+        description: XSERVER_NGINX_CONFIG,
+      });
+    }
+
+    // MySQL integration config
+    if (enableMysql) {
+      manualSteps.push({
+        title: "MySQL/MariaDB 監視設定",
+        description:
+          "/etc/datadog-agent/conf.d/mysql.d/conf.yaml に以下の内容を配置してください。" +
+          "また、Datadog 監視用 MySQL ユーザーの作成が必要です。",
+        commands: [
+          `mysql -u root -p -e "CREATE USER 'datadog'@'localhost' IDENTIFIED BY '<PASSWORD>';"`,
+          ...XSERVER_MYSQL_GRANTS.map((g) => `mysql -u root -p -e "${g}"`),
+        ],
+        outputFile: "mysql.d-conf.yaml",
+      });
+      manualSteps.push({
+        title: "MySQL 監視設定ファイル内容",
+        description: XSERVER_MYSQL_CONFIG,
+      });
+    }
+
+    // Verification: check host appears in Datadog
+    verificationCalls.push({
+      id: "verify_xserver_host",
+      tool: "datadog_list_hosts",
+      parameters: {
+        filter: tags.length > 0 ? tags[0] : `host:${host}`,
+      },
+      description: `Datadog でホスト ${host} が登録されているか確認`,
+    });
+
+    return {
+      moduleId: this.id,
+      moduleName: this.name,
+      category: this.category,
+      calls,
+      manualSteps,
+      verificationCalls,
+    };
+  }
+
   async execute(config: XserverConfig): Promise<ExecutionResult> {
     const manualSteps = [];
     const outputDir = getSecureOutputDir();
 
     // SSH install script
-    const installScript = generateXserverInstallScript(config);
+    const installScript = generateXserverInstallScript(
+      config.serverType,
+      config.host,
+      config.tags,
+      { enableProcess: config.enableProcess, enableNginx: config.enableNginx, enableMysql: config.enableMysql }
+    );
     const scriptPath = `${outputDir}/xserver-install.sh`;
     writeExecutableFile(scriptPath, installScript);
 
@@ -196,7 +313,7 @@ class XserverModule extends BaseModule {
 
     // Nginx config
     if (config.enableNginx) {
-      const nginxConf = generateNginxConfig();
+      const nginxConf = XSERVER_NGINX_CONFIG;
       const nginxPath = `${outputDir}/nginx.d-conf.yaml`;
       writeSecureFile(nginxPath, nginxConf);
 
@@ -209,7 +326,7 @@ class XserverModule extends BaseModule {
 
     // MySQL config
     if (config.enableMysql) {
-      const mysqlConf = generateMysqlConfig();
+      const mysqlConf = XSERVER_MYSQL_CONFIG;
       const mysqlPath = `${outputDir}/mysql.d-conf.yaml`;
       writeSecureFile(mysqlPath, mysqlConf);
 
@@ -218,8 +335,7 @@ class XserverModule extends BaseModule {
         description: "/etc/datadog-agent/conf.d/mysql.d/conf.yaml に配置してください。MySQLにdatadogユーザーの作成も必要です。",
         commands: [
           `mysql -u root -p -e "CREATE USER 'datadog'@'localhost' IDENTIFIED BY '<PASSWORD>';"`,
-          `mysql -u root -p -e "GRANT REPLICATION CLIENT, PROCESS ON *.* TO 'datadog'@'localhost';"`,
-          `mysql -u root -p -e "GRANT SELECT ON performance_schema.* TO 'datadog'@'localhost';"`,
+          ...XSERVER_MYSQL_GRANTS.map((g) => `mysql -u root -p -e "${g}"`),
         ],
         outputFile: mysqlPath,
       });
@@ -230,7 +346,7 @@ class XserverModule extends BaseModule {
     return { success: true, resources: [], manualSteps, errors: [] };
   }
 
-  async verify(_client: DatadogClient): Promise<VerificationResult> {
+  async verify(_client: unknown): Promise<VerificationResult> {
     return {
       success: true,
       checks: [{
@@ -240,97 +356,6 @@ class XserverModule extends BaseModule {
       }],
     };
   }
-}
-
-function generateXserverInstallScript(config: XserverConfig): string {
-  const tagStr = config.tags.length > 0 ? config.tags.join(",") : "";
-
-  return `#!/bin/bash
-# Datadog Agent Install for Xserver (${config.serverType})
-# Host: ${config.host}
-# Generated by Datadog Connect
-
-set -e
-
-DD_API_KEY="<YOUR_DD_API_KEY>"
-
-echo "=== Xserver Datadog Agent インストール ==="
-echo "ホスト: ${escapeShellArg(config.host)}"
-echo "タイプ: ${escapeShellArg(config.serverType)}"
-
-# 1. Agent インストール
-echo "1. Datadog Agent をインストール中..."
-DD_AGENT_MAJOR_VERSION=7 DD_API_KEY="\${DD_API_KEY}" \\
-  ${tagStr ? `DD_HOST_TAGS="${escapeShellArg(tagStr)}" \\` : ""}
-  bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script_agent7.sh)"
-
-# 2. 追加設定
-${config.enableProcess ? `echo "2. プロセス監視を有効化..."
-cat >> /etc/datadog-agent/datadog.yaml << 'EOF'
-
-process_config:
-  process_collection:
-    enabled: true
-EOF` : ""}
-
-# 3. Agent 再起動
-echo "3. Agent を再起動中..."
-systemctl restart datadog-agent
-
-# 4. ステータス確認
-echo ""
-echo "=== インストール完了 ==="
-datadog-agent status 2>/dev/null | head -30 || echo "Agent起動待ち..."
-
-echo ""
-echo "Datadog UIでホスト「$(hostname)」が表示されることを確認してください。"
-`;
-}
-
-function generateNginxConfig(): string {
-  return `# Nginx Datadog Integration
-# Place at: /etc/datadog-agent/conf.d/nginx.d/conf.yaml
-
-init_config:
-
-instances:
-  - nginx_status_url: http://localhost/nginx_status
-    tags:
-      - managed:datadog-connect
-
-# Nginx側でstub_statusを有効にする必要があります:
-# server {
-#   listen 80;
-#   server_name localhost;
-#   location /nginx_status {
-#     stub_status on;
-#     allow 127.0.0.1;
-#     deny all;
-#   }
-# }
-`;
-}
-
-function generateMysqlConfig(): string {
-  return `# MySQL Datadog Integration
-# Place at: /etc/datadog-agent/conf.d/mysql.d/conf.yaml
-
-init_config:
-
-instances:
-  - host: 127.0.0.1
-    username: datadog
-    password: "<DATADOG_USER_PASSWORD>"
-    port: 3306
-    options:
-      replication: false
-      galera_cluster: false
-      extra_status_metrics: true
-      extra_innodb_metrics: true
-      schema_size_metrics: true
-    tags:
-      - managed:datadog-connect
-`;
 }
 
 registerModule(new XserverModule());

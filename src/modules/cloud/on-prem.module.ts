@@ -3,25 +3,21 @@ import { BaseModule } from "../base-module.js";
 import { registerModule } from "../registry.js";
 import { promptTags } from "../shared/tags.js";
 import { printManual } from "../../utils/prompts.js";
+import {
+  ON_PREM_OS_OPTIONS,
+  ON_PREM_CM_TOOLS,
+  generateLinuxInstallScript,
+  generateWindowsInstallScript,
+  generateAgentConfigSnippet,
+  generateAnsiblePlaybook,
+} from "../../knowledge/cloud-configs.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
-import type { DatadogClient } from "../../client/datadog-client.js";
+import type { ModulePlan, McpToolCall } from "../../orchestrator/mcp-call.js";
 import { writeSecureFile, writeExecutableFile, getSecureOutputDir } from "../../utils/secure-write.js";
 import { escapeShellArg } from "../../utils/validators.js";
 
-const OS_OPTIONS = [
-  { value: "ubuntu", name: "Ubuntu / Debian" },
-  { value: "centos", name: "CentOS / RHEL / Amazon Linux" },
-  { value: "suse", name: "SUSE Linux" },
-  { value: "macos", name: "macOS" },
-  { value: "windows", name: "Windows" },
-];
-
-const CM_TOOLS = [
-  { value: "none", name: "なし (手動)" },
-  { value: "ansible", name: "Ansible" },
-  { value: "chef", name: "Chef" },
-  { value: "puppet", name: "Puppet" },
-];
+const OS_OPTIONS = ON_PREM_OS_OPTIONS;
+const CM_TOOLS = ON_PREM_CM_TOOLS;
 
 interface OnPremConfig extends ModuleConfig {
   os: string;
@@ -78,12 +74,140 @@ class OnPremModule extends BaseModule {
     return { os, hostCount, cmTool, enableProcess, enableNetwork, enableContainer, tags };
   }
 
+  plan(config: ModuleConfig): ModulePlan {
+    const onPremConfig = config as OnPremConfig;
+    const calls: McpToolCall[] = [];
+    const verificationCalls: McpToolCall[] = [];
+
+    const os = onPremConfig.os ?? "ubuntu";
+    const hostCount = onPremConfig.hostCount ?? 1;
+    const cmTool = onPremConfig.cmTool ?? "none";
+    const tags = onPremConfig.tags ?? [];
+    const flags = {
+      enableProcess: onPremConfig.enableProcess ?? true,
+      enableNetwork: onPremConfig.enableNetwork ?? false,
+      enableContainer: onPremConfig.enableContainer ?? false,
+    };
+
+    // On-premises setup is entirely manual (install agent on physical/VM servers)
+    const manualSteps = [];
+
+    // Agent install script
+    if (os === "windows") {
+      const installScript = generateWindowsInstallScript(tags);
+      manualSteps.push({
+        title: `Datadog Agent インストール (Windows) — ${hostCount} 台`,
+        description:
+          "PowerShell を管理者権限で実行して Datadog Agent をインストールしてください。" +
+          "<YOUR_DD_API_KEY> を実際の API キーに置き換えてください。",
+        commands: [
+          `# PowerShell (Administrator) で実行`,
+          `Set-ExecutionPolicy Bypass -Scope Process`,
+          `. agent-install-windows.ps1`,
+        ],
+        outputFile: "agent-install-windows.ps1",
+      });
+      manualSteps.push({
+        title: "Windows インストールスクリプト内容",
+        description: installScript,
+      });
+    } else {
+      const installScript = generateLinuxInstallScript(os, tags, flags);
+      manualSteps.push({
+        title: `Datadog Agent インストール (${os}) — ${hostCount} 台`,
+        description:
+          "以下のスクリプトを各ホストで root 権限で実行してください。" +
+          "<YOUR_DD_API_KEY> を実際の API キーに置き換えてください。",
+        commands: [
+          `chmod +x agent-install-${os}.sh`,
+          `sudo ./agent-install-${os}.sh`,
+        ],
+        outputFile: `agent-install-${os}.sh`,
+      });
+      manualSteps.push({
+        title: `Linux インストールスクリプト内容 (${os})`,
+        description: installScript,
+      });
+    }
+
+    // datadog.yaml config snippet
+    const configSnippet = generateAgentConfigSnippet(tags, flags);
+    manualSteps.push({
+      title: "Agent 設定スニペット (datadog.yaml)",
+      description:
+        "以下の設定を /etc/datadog-agent/datadog.yaml に追記してください。",
+      outputFile: "datadog.yaml.snippet",
+    });
+    manualSteps.push({
+      title: "datadog.yaml スニペット内容",
+      description: configSnippet,
+    });
+
+    // CM tool automation
+    if (cmTool === "ansible") {
+      const playbook = generateAnsiblePlaybook(tags, flags);
+      manualSteps.push({
+        title: "Ansible で一括デプロイ",
+        description:
+          "Ansible の datadog.datadog ロールを使って複数ホストに一括デプロイします。",
+        commands: [
+          `ansible-galaxy install datadog.datadog`,
+          `ansible-playbook -i inventory.ini ansible-datadog.yml \\`,
+          `  --extra-vars "datadog_api_key=<YOUR_DD_API_KEY>"`,
+        ],
+        outputFile: "ansible-datadog.yml",
+      });
+      manualSteps.push({
+        title: "Ansible Playbook 内容",
+        description: playbook,
+      });
+    } else if (cmTool !== "none") {
+      manualSteps.push({
+        title: `${cmTool} を使ったデプロイ`,
+        description:
+          `${cmTool} の Datadog モジュール/レシピを使用してください。` +
+          "詳細: https://docs.datadoghq.com/agent/basic_agent_usage/",
+      });
+    }
+
+    // Verification: check hosts appear in Datadog after agent install
+    if (tags.length > 0) {
+      verificationCalls.push({
+        id: "verify_on_prem_hosts",
+        tool: "datadog_list_hosts",
+        parameters: {
+          filter: tags[0],
+        },
+        description: `Datadog でタグ "${tags[0]}" を持つホストが登録されているか確認`,
+      });
+    } else {
+      verificationCalls.push({
+        id: "verify_on_prem_hosts",
+        tool: "datadog_list_hosts",
+        parameters: {},
+        description: "Datadog にホストが登録されているか確認",
+      });
+    }
+
+    return {
+      moduleId: this.id,
+      moduleName: this.name,
+      category: this.category,
+      calls,
+      manualSteps,
+      verificationCalls,
+    };
+  }
+
   async execute(config: OnPremConfig): Promise<ExecutionResult> {
     const manualSteps = [];
     const outputDir = getSecureOutputDir();
 
     // Agent install script
-    const installScript = generateInstallScript(config);
+    const flags = { enableProcess: config.enableProcess, enableNetwork: config.enableNetwork, enableContainer: config.enableContainer };
+    const installScript = config.os === "windows"
+      ? generateWindowsInstallScript(config.tags)
+      : generateLinuxInstallScript(config.os, config.tags, flags);
     const installPath = `${outputDir}/agent-install-${config.os}.sh`;
     writeExecutableFile(installPath, installScript);
 
@@ -95,7 +219,7 @@ class OnPremModule extends BaseModule {
     });
 
     // datadog.yaml config
-    const agentConfig = generateAgentConfig(config);
+    const agentConfig = generateAgentConfigSnippet(config.tags, flags);
     const configPath = `${outputDir}/datadog.yaml.snippet`;
     writeSecureFile(configPath, agentConfig);
 
@@ -107,7 +231,9 @@ class OnPremModule extends BaseModule {
 
     // CM tool recipe
     if (config.cmTool !== "none") {
-      const cmScript = generateCmRecipe(config);
+      const cmScript = config.cmTool === "ansible"
+        ? generateAnsiblePlaybook(config.tags, flags)
+        : generateLinuxInstallScript(config.os, config.tags, flags);
       const cmPath = `${outputDir}/${config.cmTool}-datadog.${config.cmTool === "ansible" ? "yml" : "rb"}`;
       writeSecureFile(cmPath, cmScript);
 
@@ -123,7 +249,7 @@ class OnPremModule extends BaseModule {
     return { success: true, resources: [], manualSteps, errors: [] };
   }
 
-  async verify(_client: DatadogClient): Promise<VerificationResult> {
+  async verify(_client: unknown): Promise<VerificationResult> {
     return {
       success: true,
       checks: [
@@ -135,99 +261,6 @@ class OnPremModule extends BaseModule {
       ],
     };
   }
-}
-
-function generateInstallScript(config: OnPremConfig): string {
-  const escapedTagStr = config.tags.length > 0
-    ? `DD_HOST_TAGS=${escapeShellArg(config.tags.join(","))}`
-    : "";
-
-  if (config.os === "windows") {
-    return `# Datadog Agent Install - Windows
-# Run in PowerShell as Administrator
-
-$env:DD_API_KEY = "<YOUR_DD_API_KEY>"
-${escapedTagStr ? `$env:DD_HOST_TAGS = "${config.tags.join(",")}"` : ""}
-
-. { Set-ExecutionPolicy Bypass -Scope Process; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; iex ((New-Object System.Net.WebClient).DownloadString('https://s3.amazonaws.com/dd-agent/scripts/install_script_agent7.ps1')) }
-`;
-  }
-
-  return `#!/bin/bash
-# Datadog Agent Install - ${config.os}
-# Generated by Datadog Connect
-
-set -e
-
-DD_API_KEY="<YOUR_DD_API_KEY>"
-${escapedTagStr}
-
-echo "=== Datadog Agent インストール ==="
-
-DD_AGENT_MAJOR_VERSION=7 DD_API_KEY="\${DD_API_KEY}" \\
-  ${escapedTagStr ? `DD_HOST_TAGS="\${DD_HOST_TAGS}" \\` : ""}
-  bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script_agent7.sh)"
-
-${config.enableProcess ? `# プロセス監視有効化
-echo "process_config:" >> /etc/datadog-agent/datadog.yaml
-echo "  process_collection:" >> /etc/datadog-agent/datadog.yaml
-echo "    enabled: true" >> /etc/datadog-agent/datadog.yaml` : ""}
-
-${config.enableNetwork ? `# ネットワーク監視有効化
-echo "network_config:" >> /etc/datadog-agent/system-probe.yaml
-echo "  enabled: true" >> /etc/datadog-agent/system-probe.yaml` : ""}
-
-# Agent再起動
-systemctl restart datadog-agent
-
-echo "=== インストール完了 ==="
-datadog-agent status | head -20
-`;
-}
-
-function generateAgentConfig(config: OnPremConfig): string {
-  return `# Datadog Agent Configuration Snippet
-# Add to /etc/datadog-agent/datadog.yaml
-
-${config.tags.length > 0 ? `tags:\n${config.tags.map((t) => `  - ${t}`).join("\n")}` : ""}
-
-${config.enableProcess ? `process_config:
-  process_collection:
-    enabled: true` : ""}
-
-${config.enableContainer ? `container_collect_all: true` : ""}
-
-logs_enabled: true
-`;
-}
-
-function generateCmRecipe(config: OnPremConfig): string {
-  if (config.cmTool === "ansible") {
-    return `---
-# Ansible Playbook - Datadog Agent
-# Generated by Datadog Connect
-
-- hosts: all
-  become: true
-  roles:
-    - role: datadog.datadog
-      datadog_api_key: "{{ datadog_api_key }}"
-      datadog_agent_major_version: 7
-      datadog_config:
-        tags:
-${config.tags.map((t) => `          - "${t}"`).join("\n")}
-        process_config:
-          process_collection:
-            enabled: ${config.enableProcess}
-        logs_enabled: true
-`;
-  }
-
-  // Chef / Puppet placeholder
-  return `# ${config.cmTool} Recipe - Datadog Agent
-# Generated by Datadog Connect
-# See: https://docs.datadoghq.com/integrations/${config.cmTool}/
-`;
 }
 
 registerModule(new OnPremModule());

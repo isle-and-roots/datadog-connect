@@ -12,7 +12,7 @@ interface Journal {
 
 function getJournalPath(sessionId: string): string {
   const dir = join(homedir(), STATE_DIR, "state");
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 });
   return join(dir, `journal-${sessionId}.json`);
 }
 

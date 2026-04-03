@@ -5,27 +5,21 @@ import { RESOURCE_PREFIX } from "../../config/constants.js";
 import { printSuccess, printManual, printInfo } from "../../utils/prompts.js";
 import { writeSecureFile, getSecureOutputDir } from "../../utils/secure-write.js";
 import { join } from "node:path";
+import {
+  CWS_PROTECTION_TARGETS,
+  CWS_PRESET_POLICIES,
+  generateCwsSystemProbeYaml,
+} from "../../knowledge/security-rules.js";
 import type {
   ModuleConfig,
   ExecutionResult,
   VerificationResult,
   PreflightResult,
 } from "../../config/types.js";
-import type { DatadogClient } from "../../client/datadog-client.js";
+import type { McpToolCall, ModulePlan } from "../../orchestrator/mcp-call.js";
 
-// ── CWS 保護対象 ──
-const PROTECTION_TARGETS = [
-  { value: "file_integrity", name: "ファイル改竄検知" },
-  { value: "process_exec", name: "プロセス実行監視" },
-  { value: "network_conn", name: "ネットワーク接続監視" },
-] as const;
-
-// ── プリセットポリシー ──
-const PRESET_POLICIES = [
-  { value: "web_server", name: "Web Server" },
-  { value: "database", name: "Database" },
-  { value: "container_runtime", name: "Container Runtime" },
-] as const;
+const PROTECTION_TARGETS = CWS_PROTECTION_TARGETS as readonly { value: "file_integrity" | "process_exec" | "network_conn"; name: string }[];
+const PRESET_POLICIES = CWS_PRESET_POLICIES as readonly { value: "web_server" | "database" | "container_runtime"; name: string }[];
 
 type ProtectionTarget = (typeof PROTECTION_TARGETS)[number]["value"];
 type PresetPolicy = (typeof PRESET_POLICIES)[number]["value"];
@@ -42,9 +36,9 @@ class CwsModule extends BaseModule {
   readonly category = "security" as const;
   readonly dependencies: string[] = [];
 
-  async preflight(client: DatadogClient): Promise<PreflightResult> {
+  async preflight(client: unknown): Promise<PreflightResult> {
     try {
-      await client.security.csmThreats.listCSMThreatsAgentPolicies();
+      await (client as any).security.csmThreats.listCSMThreatsAgentPolicies();
       return { available: true };
     } catch {
       return {
@@ -52,6 +46,65 @@ class CwsModule extends BaseModule {
         reason: "CWSはEnterprise以上のプランが必要です",
       };
     }
+  }
+
+  plan(config: ModuleConfig): ModulePlan {
+    const cfg = config as CwsConfig;
+    const calls: McpToolCall[] = [];
+    const manualSteps = [];
+
+    const protectionTargets = cfg.protectionTargets ?? [];
+    const presetPolicies = cfg.presetPolicies ?? [];
+
+    // Create agent policy calls for each selected preset policy
+    for (const policy of presetPolicies) {
+      const policyName = `${RESOURCE_PREFIX} CWS ${policy}`;
+      calls.push({
+        tool: "datadog_create_cws_agent_policy",
+        parameters: {
+          name: policyName,
+          description: `Managed by datadog-connect: ${policy} preset`,
+          enabled: true,
+          host_tags_lists: [],
+        },
+        description: `CWSエージェントポリシー「${policy}」を作成`,
+        rollbackCall: {
+          tool: "datadog_delete_cws_agent_policy",
+          parameters: { policy_id: "{{created_id}}" },
+          description: `CWSエージェントポリシー「${policyName}」を削除`,
+        },
+      });
+    }
+
+    // Manual step: system-probe.yaml configuration
+    const yamlContent = generateCwsSystemProbeYaml(protectionTargets);
+    manualSteps.push({
+      title: "CWS 有効化 (system-probe.yaml)",
+      description:
+        "各ホストに system-probe.yaml を配置し、Datadog Agent を再起動してください",
+      commands: [
+        "# 以下の内容を /etc/datadog-agent/system-probe.yaml に配置してください:",
+        "",
+        yamlContent,
+        "",
+        "sudo systemctl restart datadog-agent",
+      ],
+    });
+
+    return {
+      moduleId: this.id,
+      moduleName: this.name,
+      category: this.category,
+      calls,
+      manualSteps,
+      verificationCalls: [
+        {
+          tool: "datadog_list_cws_agent_policies",
+          parameters: {},
+          description: "CWSエージェントポリシー一覧を取得して作成確認",
+        },
+      ],
+    };
   }
 
   async prompt(): Promise<CwsConfig> {
@@ -78,7 +131,7 @@ class CwsModule extends BaseModule {
 
   async execute(
     config: CwsConfig,
-    client: DatadogClient
+    client: unknown
   ): Promise<ExecutionResult> {
     const resources = [];
     const errors = [];
@@ -88,7 +141,7 @@ class CwsModule extends BaseModule {
     for (const policy of config.presetPolicies) {
       const policyName = `${RESOURCE_PREFIX} CWS ${policy}`;
       try {
-        const resp = await client.security.csmThreats.createCSMThreatsAgentPolicy({
+        const resp = await (client as any).security.csmThreats.createCSMThreatsAgentPolicy({
           body: {
             data: {
               type: "policy",
@@ -128,7 +181,7 @@ class CwsModule extends BaseModule {
     const outputPath = join(outputDir, "cws-system-probe.yaml");
 
     const targets = config.protectionTargets;
-    const yamlContent = generateSystemProbeYaml(targets);
+    const yamlContent = generateCwsSystemProbeYaml(targets);
 
     writeSecureFile(outputPath, yamlContent);
     printManual(`手順書を出力しました: ${outputPath}`);
@@ -156,12 +209,12 @@ class CwsModule extends BaseModule {
     };
   }
 
-  async verify(client: DatadogClient): Promise<VerificationResult> {
+  async verify(client: unknown): Promise<VerificationResult> {
     const checks = [];
     try {
-      const resp = await client.security.csmThreats.listCSMThreatsAgentPolicies();
+      const resp = await (client as any).security.csmThreats.listCSMThreatsAgentPolicies();
       const policies = resp.data ?? [];
-      const managedPolicies = policies.filter((p) =>
+      const managedPolicies = policies.filter((p: any) =>
         (p.attributes?.name ?? "").startsWith(RESOURCE_PREFIX)
       );
       const expected = this.createdResources.length;
@@ -180,40 +233,6 @@ class CwsModule extends BaseModule {
     }
     return { success: checks.every((c) => c.passed), checks };
   }
-}
-
-// ── ヘルパー: system-probe.yaml 生成 ──
-function generateSystemProbeYaml(targets: ProtectionTarget[]): string {
-  const fileIntegrity = targets.includes("file_integrity");
-  const processExec = targets.includes("process_exec");
-  const networkConn = targets.includes("network_conn");
-
-  return `# system-probe.yaml — CWS (Cloud Workload Security) 設定
-# Generated by datadog-connect
-# このファイルを /etc/datadog-agent/system-probe.yaml に配置し、
-# Datadog Agent を再起動してください。
-
-runtime_security_config:
-  ## CWS 全体の有効化
-  enabled: true
-
-  ## ファイル改竄検知
-  fim_enabled: ${fileIntegrity}
-
-  ## プロセス実行監視
-  ## process_exec は runtime_security_config.enabled=true で自動有効
-  # process_exec_enabled: ${processExec}
-
-  ## ネットワーク接続監視
-  network:
-    enabled: ${networkConn}
-
-  ## ポリシーファイルの配置先 (オプション)
-  # policies_dir: /etc/datadog-agent/runtime-security.d/
-
-  ## イベントサーバー設定
-  socket: /opt/datadog-agent/run/runtime-security.sock
-`;
 }
 
 registerModule(new CwsModule());

@@ -8,7 +8,7 @@ import type { SessionState, DatadogSite } from "../config/types.js";
 
 function getStateDir(): string {
   const dir = join(homedir(), STATE_DIR, "state");
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 });
   return dir;
 }
 

@@ -1,15 +1,19 @@
 import { confirm } from "@inquirer/prompts";
-import { promptCredentials } from "./auth/key-manager.js";
-import { createDatadogClient } from "./client/datadog-client.js";
 import { loadLatestSession, loadSession } from "./state/state-manager.js";
 import { loadJournal } from "./state/operation-journal.js";
-import { deleteResource, SkipError } from "./lib/delete-resource.js";
+import { buildRollbackPlan } from "./orchestrator/rollback-planner.js";
+import { renderPlanAsMarkdown } from "./orchestrator/plan-renderer.js";
 import {
   printBanner,
   printSuccess,
   printError,
   printInfo,
 } from "./utils/prompts.js";
+import { writeSecureFile } from "./utils/secure-write.js";
+import { getSecureOutputDir } from "./utils/secure-write.js";
+import { join } from "node:path";
+import type { ExecutionPlan } from "./orchestrator/mcp-call.js";
+import { randomUUID } from "node:crypto";
 
 export interface RollbackOptions {
   sessionId?: string;
@@ -41,7 +45,7 @@ export async function runRollback(opts: RollbackOptions): Promise<void> {
     return;
   }
 
-  const resources = [...journal.resources].reverse();
+  const resources = [...journal.resources];
 
   console.log();
   console.log(
@@ -56,8 +60,8 @@ export async function runRollback(opts: RollbackOptions): Promise<void> {
   console.log();
 
   const ok = await confirm({
-    message: "上記のリソースをすべて削除しますか？",
-    default: false,
+    message: "上記のリソースのロールバックプランを生成しますか？",
+    default: true,
   });
 
   if (!ok) {
@@ -65,44 +69,40 @@ export async function runRollback(opts: RollbackOptions): Promise<void> {
     return;
   }
 
-  // 認証
-  const creds = await promptCredentials(session.profile);
-  const client = createDatadogClient(creds);
+  // ロールバックプランを生成（MCPツール呼び出しプラン）
+  const rollbackCalls = buildRollbackPlan(resources);
 
-  let succeeded = 0;
-  let skipped = 0;
-  let failed = 0;
+  const plan: ExecutionPlan = {
+    sessionId: randomUUID(),
+    site: session.site,
+    preset: "rollback",
+    createdAt: new Date().toISOString(),
+    modules: [
+      {
+        moduleId: "rollback",
+        moduleName: "Rollback",
+        category: "cloud",
+        calls: rollbackCalls,
+        manualSteps: [],
+        verificationCalls: [],
+      },
+    ],
+    totalCalls: rollbackCalls.length,
+  };
 
-  for (const resource of resources) {
-    try {
-      await deleteResource(client, resource);
-      printSuccess(`削除完了: [${resource.type}] ${resource.name}`);
-      succeeded++;
-    } catch (err) {
-      if (err instanceof SkipError) {
-        printInfo(err.message);
-        skipped++;
-      } else {
-        const message =
-          err instanceof Error ? err.message : String(err);
-        printError(`削除失敗: [${resource.type}] ${resource.name} — ${message}`);
-        failed++;
-      }
-    }
-  }
+  const markdown = renderPlanAsMarkdown(plan);
+
+  // 出力先に保存
+  const outputDir = getSecureOutputDir();
+  const outputPath = join(outputDir, `rollback-${session.sessionId.slice(0, 8)}.md`);
+  writeSecureFile(outputPath, markdown);
 
   console.log();
-  console.log("  ─── ロールバック結果 ───────────────────────");
-  console.log(`    削除成功: ${succeeded}`);
-  console.log(`    スキップ: ${skipped}`);
-  console.log(`    失敗    : ${failed}`);
-  console.log("  ────────────────────────────────────────────");
+  printSuccess("ロールバックプランを生成しました！");
   console.log();
-
-  if (failed > 0) {
-    printError("一部のリソースの削除に失敗しました。Datadog コンソールで確認してください。");
-    process.exit(1);
-  } else {
-    printSuccess("ロールバック完了。");
-  }
+  console.log("  生成されたプランの MCP ツール呼び出しを実行してください:");
+  console.log(`  ${outputPath}`);
+  console.log();
+  console.log(`  合計 ${rollbackCalls.length} 件の削除操作が必要です。`);
+  console.log("  Datadog MCP サーバーで各ツール呼び出しを実行してください。");
 }

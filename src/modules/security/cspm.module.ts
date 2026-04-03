@@ -8,31 +8,20 @@ import {
   validateGcpProjectId,
   validateAzureSubscriptionId,
 } from "../../utils/validators.js";
+import { CSPM_CLOUD_PROVIDERS, CSPM_SCAN_TARGETS } from "../../knowledge/security-rules.js";
 import type {
   ModuleConfig,
   ExecutionResult,
   VerificationResult,
   PreflightResult,
 } from "../../config/types.js";
-import type { DatadogClient } from "../../client/datadog-client.js";
+import type { McpToolCall, ModulePlan } from "../../orchestrator/mcp-call.js";
 
-// ── クラウドプロバイダー ──
-const CLOUD_PROVIDERS = [
-  { value: "aws", name: "AWS" },
-  { value: "gcp", name: "GCP" },
-  { value: "azure", name: "Azure" },
-] as const;
+const CLOUD_PROVIDERS = CSPM_CLOUD_PROVIDERS as readonly { value: "aws" | "gcp" | "azure"; name: string }[];
+const SCAN_TARGETS = CSPM_SCAN_TARGETS as readonly { value: "vulnHostOs" | "vulnContainersOs" | "lambda"; name: string; defaultChecked: boolean }[];
 
 type CloudProvider = (typeof CLOUD_PROVIDERS)[number]["value"];
-
-// ── スキャン対象 ──
-const SCAN_TARGETS = [
-  { value: "vulnHostOs", name: "ホスト脆弱性スキャン" },
-  { value: "vulnContainersOs", name: "コンテナ脆弱性スキャン" },
-  { value: "lambda", name: "Lambda脆弱性スキャン (AWS のみ)" },
-] as const;
-
-type ScanTarget = (typeof SCAN_TARGETS)[number]["value"];
+type ScanTarget = "vulnHostOs" | "vulnContainersOs" | "lambda";
 
 interface ProviderAccount {
   provider: CloudProvider;
@@ -53,13 +42,92 @@ class CspmModule extends BaseModule {
   readonly category = "security" as const;
   readonly dependencies: string[] = [];
 
-  async preflight(client: DatadogClient): Promise<PreflightResult> {
+  async preflight(client: unknown): Promise<PreflightResult> {
     try {
-      await client.security.csmCoverage.getCSMCloudAccountsCoverageAnalysis();
+      await (client as any).security.csmCoverage.getCSMCloudAccountsCoverageAnalysis();
       return { available: true };
     } catch {
       return { available: false, reason: "CSPMはEnterprise以上のプランが必要です" };
     }
+  }
+
+  plan(config: ModuleConfig): ModulePlan {
+    const cfg = config as CspmConfig;
+    const calls: McpToolCall[] = [];
+    const verificationCalls: McpToolCall[] = [];
+
+    const accounts = cfg.accounts ?? [];
+    const scanTargets = cfg.scanTargets ?? [];
+
+    const vulnHostOs = scanTargets.includes("vulnHostOs");
+    const vulnContainersOs = scanTargets.includes("vulnContainersOs");
+    const lambda = scanTargets.includes("lambda");
+
+    for (const account of accounts) {
+      if (account.provider === "aws") {
+        calls.push({
+          tool: "datadog_create_aws_agentless_scan_options",
+          parameters: {
+            account_id: account.accountId,
+            vuln_host_os: vulnHostOs,
+            vuln_containers_os: vulnContainersOs,
+            lambda: lambda,
+            sensitive_data: false,
+          },
+          description: `AWS Agentlessスキャン有効化: ${account.accountId}`,
+          rollbackCall: {
+            tool: "datadog_delete_aws_agentless_scan_options",
+            parameters: { account_id: account.accountId },
+            description: `AWS Agentlessスキャン設定削除: ${account.accountId}`,
+          },
+        });
+      } else if (account.provider === "gcp") {
+        calls.push({
+          tool: "datadog_create_gcp_agentless_scan_options",
+          parameters: {
+            project_id: account.accountId,
+            vuln_host_os: vulnHostOs,
+            vuln_containers_os: vulnContainersOs,
+          },
+          description: `GCP Agentlessスキャン有効化: ${account.accountId}`,
+          rollbackCall: {
+            tool: "datadog_delete_gcp_agentless_scan_options",
+            parameters: { project_id: account.accountId },
+            description: `GCP Agentlessスキャン設定削除: ${account.accountId}`,
+          },
+        });
+      } else if (account.provider === "azure") {
+        calls.push({
+          tool: "datadog_create_azure_agentless_scan_options",
+          parameters: {
+            subscription_id: account.accountId,
+            vuln_host_os: vulnHostOs,
+            vuln_containers_os: vulnContainersOs,
+          },
+          description: `Azure Agentlessスキャン有効化: ${account.accountId}`,
+          rollbackCall: {
+            tool: "datadog_delete_azure_agentless_scan_options",
+            parameters: { subscription_id: account.accountId },
+            description: `Azure Agentlessスキャン設定削除: ${account.accountId}`,
+          },
+        });
+      }
+    }
+
+    verificationCalls.push({
+      tool: "datadog_get_csm_cloud_accounts_coverage",
+      parameters: {},
+      description: "CSPMクラウドアカウントカバレッジを確認してAgentlessスキャンが有効であることを検証",
+    });
+
+    return {
+      moduleId: this.id,
+      moduleName: this.name,
+      category: this.category,
+      calls,
+      manualSteps: [],
+      verificationCalls,
+    };
   }
 
   async prompt(): Promise<CspmConfig> {
@@ -117,7 +185,7 @@ class CspmModule extends BaseModule {
     return { providers, accounts, scanTargets, confirmEnable };
   }
 
-  async execute(config: CspmConfig, client: DatadogClient): Promise<ExecutionResult> {
+  async execute(config: CspmConfig, client: unknown): Promise<ExecutionResult> {
     const resources = [];
     const errors = [];
 
@@ -137,7 +205,7 @@ class CspmModule extends BaseModule {
     for (const account of config.accounts) {
       if (account.provider === "aws") {
         try {
-          await client.security.agentlessScanning.createAwsScanOptions({
+          await (client as any).security.agentlessScanning.createAwsScanOptions({
             body: {
               data: {
                 id: account.accountId,
@@ -173,7 +241,7 @@ class CspmModule extends BaseModule {
         }
       } else if (account.provider === "gcp") {
         try {
-          await client.security.agentlessScanning.createGcpScanOptions({
+          await (client as any).security.agentlessScanning.createGcpScanOptions({
             body: {
               data: {
                 id: account.accountId,
@@ -207,7 +275,7 @@ class CspmModule extends BaseModule {
         }
       } else if (account.provider === "azure") {
         try {
-          await client.security.agentlessScanning.createAzureScanOptions({
+          await (client as any).security.agentlessScanning.createAzureScanOptions({
             body: {
               data: {
                 id: account.accountId,
@@ -250,10 +318,10 @@ class CspmModule extends BaseModule {
     };
   }
 
-  async verify(client: DatadogClient): Promise<VerificationResult> {
+  async verify(client: unknown): Promise<VerificationResult> {
     const checks = [];
     try {
-      const resp = await client.security.csmCoverage.getCSMCloudAccountsCoverageAnalysis();
+      const resp = await (client as any).security.csmCoverage.getCSMCloudAccountsCoverageAnalysis();
       const enabled = resp.data != null;
       checks.push({
         name: "CSPMクラウドアカウントカバレッジ確認",

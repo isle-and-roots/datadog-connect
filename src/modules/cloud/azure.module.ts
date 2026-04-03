@@ -4,9 +4,14 @@ import { registerModule } from "../registry.js";
 import { promptTags } from "../shared/tags.js";
 import { printManual } from "../../utils/prompts.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
-import type { DatadogClient } from "../../client/datadog-client.js";
+import type { ModulePlan, McpToolCall } from "../../orchestrator/mcp-call.js";
 import { writeExecutableFile, getSecureOutputDir } from "../../utils/secure-write.js";
 import { escapeShellArg, validateAzureSubscriptionId } from "../../utils/validators.js";
+import {
+  AZURE_REQUIRED_ROLE,
+  AZURE_INTEGRATION_CONSOLE_URL,
+  generateAzureSetupScript,
+} from "../../knowledge/cloud-configs.js";
 import { getBrowserController } from "../../browser/browser-controller.js";
 import { fetchAzureSubscriptionId as fetchAzureSubIdFromBrowser } from "../../browser/cloud-browser.js";
 
@@ -111,13 +116,87 @@ class AzureModule extends BaseModule {
     return { tenantName, clientId, clientSecret, subscriptionIds, automute, enableCspm, tags };
   }
 
-  async execute(config: AzureConfig, client: DatadogClient): Promise<ExecutionResult> {
+  plan(config: ModuleConfig): ModulePlan {
+    const azureConfig = config as AzureConfig;
+    const calls: McpToolCall[] = [];
+    const verificationCalls: McpToolCall[] = [];
+
+    const tenantName = azureConfig.tenantName ?? "<AZURE_TENANT_NAME>";
+    const clientId = azureConfig.clientId ?? "<AZURE_CLIENT_ID>";
+    const subscriptionIds = azureConfig.subscriptionIds ?? [];
+    const automute = azureConfig.automute ?? true;
+    const enableCspm = azureConfig.enableCspm ?? false;
+    const tags = azureConfig.tags ?? [];
+
+    // Step 1: Create Azure integration in Datadog
+    calls.push({
+      id: "create_azure_integration",
+      tool: "datadog_create_azure_integration",
+      parameters: {
+        tenant_name: tenantName,
+        client_id: clientId,
+        // client_secret is a sensitive value — the user provides it at execution time
+        client_secret: "<AZURE_CLIENT_SECRET>",
+        automute,
+        cspm_enabled: enableCspm,
+        host_filters: tags.join(","),
+      },
+      description: `Azure テナント ${tenantName} の Datadog 統合を作成`,
+    });
+
+    // Manual steps: az CLI commands to assign Reader role on each subscription
+    const azScript = generateAzureSetupScript(tenantName, clientId, subscriptionIds);
+    const manualSteps = [
+      {
+        title: "Azure App Registration の作成と Reader ロール付与",
+        description:
+          `App Registration (Client ID: ${clientId}) が未作成の場合は先に作成してください。` +
+          `次に、各サブスクリプション (${subscriptionIds.length} 件) に対して` +
+          `"${AZURE_REQUIRED_ROLE}" ロールを付与します。`,
+        commands: [
+          `chmod +x azure-setup.sh`,
+          `./azure-setup.sh`,
+        ],
+        outputFile: "azure-setup.sh",
+      },
+      {
+        title: "Azure セットアップスクリプト内容",
+        description: azScript,
+      },
+      {
+        title: "Datadog コンソールでの確認",
+        description:
+          `${AZURE_INTEGRATION_CONSOLE_URL} で Azure 統合のステータスを確認してください。`,
+        commands: [`open ${AZURE_INTEGRATION_CONSOLE_URL}`],
+      },
+    ];
+
+    // Verification: list Azure integrations
+    verificationCalls.push({
+      id: "verify_azure_integration",
+      tool: "datadog_list_azure_integrations",
+      parameters: {},
+      description: `Azure 統合一覧を取得してテナント ${tenantName} が登録されているか確認`,
+      dependsOn: ["create_azure_integration"],
+    });
+
+    return {
+      moduleId: this.id,
+      moduleName: this.name,
+      category: this.category,
+      calls,
+      manualSteps,
+      verificationCalls,
+    };
+  }
+
+  async execute(config: AzureConfig, client: unknown): Promise<ExecutionResult> {
     const resources = [];
     const manualSteps = [];
     const errors = [];
 
     try {
-      await client.v1.azure.createAzureIntegration({
+      await (client as any).v1.azure.createAzureIntegration({
         body: {
           tenantName: config.tenantName,
           clientId: config.clientId,
@@ -157,11 +236,11 @@ class AzureModule extends BaseModule {
     return { success: errors.length === 0, resources, manualSteps, errors };
   }
 
-  async verify(client: DatadogClient): Promise<VerificationResult> {
+  async verify(client: unknown): Promise<VerificationResult> {
     const checks = [];
     try {
-      const resp = await client.v1.azure.listAzureIntegration();
-      const found = resp.some((a) => a.tenantName === this.createdResources[0]?.id);
+      const resp = await (client as any).v1.azure.listAzureIntegration();
+      const found = resp.some((a: any) => a.tenantName === this.createdResources[0]?.id);
       checks.push({
         name: "Azure統合が登録されている",
         passed: found,

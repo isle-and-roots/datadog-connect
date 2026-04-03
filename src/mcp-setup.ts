@@ -8,16 +8,10 @@ import { startSpinner, succeedSpinner, failSpinner } from "./utils/spinner.js";
 
 interface McpSetupOptions {
   scope?: "local" | "user" | "project";
-  self?: boolean;
 }
 
 export async function runMcpSetup(opts: McpSetupOptions): Promise<void> {
   printBanner();
-
-  // --self: datadog-connect 自体を MCP サーバーとして登録
-  if (opts.self) {
-    return registerSelfAsMcp(opts);
-  }
 
   printStep(1, "Datadog MCP サーバーセットアップ");
 
@@ -113,19 +107,22 @@ export async function runMcpSetup(opts: McpSetupOptions): Promise<void> {
   startSpinner("@winor30/mcp-server-datadog をインストール中...");
 
   try {
-    // spawn で引数配列として渡し、API キーが ps / shell history に露出しないようにする
+    // env オプションで認証情報を渡し、プロセスリスト(ps aux)への露出を防ぐ
     const args = [
       "mcp", "add",
       "-s", scope,
-      "-e", `DD_API_KEY=${apiKey}`,
-      "-e", `DD_APP_KEY=${appKey}`,
-      "-e", `DD_SITE=${site}`,
+      "-e", "DD_API_KEY",
+      "-e", "DD_APP_KEY",
+      "-e", "DD_SITE",
       "datadog",
       "--",
       "npx", "-y", "@winor30/mcp-server-datadog",
     ];
 
-    const result = spawnSync("claude", args, { stdio: "pipe" });
+    const result = spawnSync("claude", args, {
+      stdio: "pipe",
+      env: { ...process.env, DD_API_KEY: apiKey, DD_APP_KEY: appKey, DD_SITE: site },
+    });
     if (result.status !== 0) {
       throw new Error(result.stderr?.toString() || "claude mcp add failed");
     }
@@ -167,87 +164,10 @@ export async function runMcpSetup(opts: McpSetupOptions): Promise<void> {
   console.log("  ・ダッシュボードの操作");
   console.log("  ・インシデント管理");
   console.log();
-  console.log("  💡 Claude Code で「Datadogの直近のアラートを確認して」と聞いてみてください");
+  console.log("  次のステップ:");
+  console.log("  ・datadog-connect setup   — セットアップランブックを生成");
+  console.log("  ・datadog-connect plan    — プリセットからプランを直接生成");
   console.log();
-}
-
-async function registerSelfAsMcp(opts: McpSetupOptions): Promise<void> {
-  printStep(1, "Datadog Connect MCP サーバー登録");
-
-  // Check claude CLI
-  try {
-    execSync("claude --version", { stdio: "pipe" });
-  } catch {
-    printError("Claude Code CLI が見つかりません。");
-    printInfo("Claude Code をインストールしてください: https://claude.ai/code");
-    return;
-  }
-
-  // Get credentials
-  const apiKey = process.env.DD_API_KEY ?? "";
-  const appKey = process.env.DD_APP_KEY ?? "";
-  const site = process.env.DD_SITE ?? "datadoghq.com";
-
-  if (!apiKey || !appKey) {
-    printError("DD_API_KEY と DD_APP_KEY 環境変数を設定してください。");
-    printInfo("例:");
-    console.log();
-    console.log("  export DD_API_KEY=\"あなたのAPIキー\"");
-    console.log("  export DD_APP_KEY=\"あなたのApplicationキー\"");
-    console.log("  npx datadog-connect mcp --self");
-    console.log();
-    return;
-  }
-
-  // Resolve npx absolute path from current Node.js process
-  const { dirname } = await import("node:path");
-  const nodeBinDir = dirname(process.execPath);
-  const npxPath = join(nodeBinDir, "npx");
-
-  const scope = opts.scope ?? "user";
-
-  printStep(2, "MCP サーバーを登録中");
-  startSpinner("datadog-connect-mcp を登録中...");
-
-  try {
-    const result = spawnSync("claude", [
-      "mcp", "add",
-      "-s", scope,
-      "-e", `DD_API_KEY=${apiKey}`,
-      "-e", `DD_APP_KEY=${appKey}`,
-      "-e", `DD_SITE=${site}`,
-      "datadog-connect",
-      "--",
-      npxPath, "-y", "datadog-connect-mcp",
-    ], { stdio: "pipe" });
-
-    if (result.status !== 0) {
-      throw new Error(result.stderr?.toString() || "claude mcp add failed");
-    }
-    succeedSpinner("Datadog Connect MCP サーバーを登録しました");
-  } catch (err) {
-    failSpinner("登録に失敗しました");
-    const msg = err instanceof Error ? err.message : String(err);
-    printError(msg);
-    printInfo("手動で登録する場合:");
-    console.log();
-    console.log(`  claude mcp add -s ${scope} -e DD_API_KEY=\${DD_API_KEY} -e DD_APP_KEY=\${DD_APP_KEY} -e DD_SITE=\${DD_SITE} datadog-connect -- ${npxPath} -y datadog-connect-mcp`);
-    console.log();
-    return;
-  }
-
-  printSuccess("登録完了！");
-  console.log();
-  console.log("  Claude Code で以下のように話しかけるだけでセットアップできます:");
-  console.log("  ・「Datadogをセットアップして」");
-  console.log("  ・「AWSのDatadog監視を設定して」");
-  console.log("  ・「前回の失敗を再実行して」");
-  console.log("  ・「作成したリソースを削除して」");
-  console.log();
-  console.log("  4つのツールが利用可能です:");
-  console.log("  ・datadog_setup   — セットアップ実行");
-  console.log("  ・datadog_status  — セッション状態確認");
-  console.log("  ・datadog_resume  — 失敗モジュール再実行");
-  console.log("  ・datadog_rollback — リソース削除");
+  console.log("  Claude Code で「Datadogの直近のアラートを確認して」と聞いてみてください");
   console.log();
 }

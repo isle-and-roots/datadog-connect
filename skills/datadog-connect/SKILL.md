@@ -1,75 +1,74 @@
 ---
 name: datadog-connect
-description: "Datadogの全機能をワンコマンドでセットアップするウィザード。Use when user mentions Datadog setup, Datadog monitoring, Datadog configure, Datadog integration, monitoring setup, observability setup, AWS/GCP/Azure monitoring, Xserver monitoring, CSPM, WAF, SIEM setup. Trigger: 'Datadogをセットアップ', 'Datadog設定して', 'monitoring設定', 'Datadog connect'. Do NOT load for: Datadog API queries, checking alerts, viewing dashboards, existing monitoring data."
-description-ja: "Datadogの全機能をワンコマンドでセットアップ。16モジュール対応（Cloud 6/Feature 5/Security 5）+ ブラウザ自動取得。"
+description: "Datadog MCP と連携して監視環境のセットアップ・運用・最適化を支援するハーネス。Use when user mentions Datadog setup, Datadog monitoring, Datadog configure, Datadog integration, monitoring setup, observability setup, harness, MCP setup, AWS/GCP/Azure monitoring, Xserver monitoring, CSPM, WAF, SIEM setup, incident investigation, monitoring best practices, audit monitoring. Trigger: 'Datadogをセットアップ', 'Datadog設定して', 'monitoring設定', 'Datadog connect', 'Datadog harness', 'MCP連携', '監視のベストプラクティス', '障害調査', 'Datadog監査'. Do NOT load for: checking alerts, viewing dashboards (use Datadog MCP directly), existing monitoring data queries."
+description-ja: "Datadog MCP と連携した監視環境のセットアップ・運用・最適化ハーネス。16モジュール対応（Cloud 6/Feature 5/Security 5）、ガイド付きセットアップ、ベストプラクティス適用、インシデント対応、監査・最適化を統合提供。"
 allowed-tools: ["Bash", "Read", "Write", "Edit"]
-argument-hint: "[setup|resume|rollback|mcp]"
+argument-hint: "[setup|plan|bestpractice|incident|audit]"
 ---
 
-# Datadog Connect
+# Datadog MCP Harness
 
-Datadogの全機能を対話形式でセットアップするCLIウィザード。
+公式 Datadog MCP と連携して監視環境のセットアップ・運用・最適化を行うハーネススキル。
 
 ## Quick Reference
 
-| コマンド | 説明 |
-|---------|------|
-| `/datadog-connect setup` | セットアップウィザード |
-| `/datadog-connect resume` | 前回の失敗モジュールを再実行 |
-| `/datadog-connect rollback` | 作成リソースを削除 |
-| `/datadog-connect mcp` | Datadog MCP サーバーを接続 |
+| サブスキル | トリガー | 説明 |
+|-----------|---------|------|
+| `dd-setup` | セットアップ / configure / 初期設定 | 環境検出 → プリセット推奨 → MCP コール計画生成 |
+| `dd-bestpractice` | ベストプラクティス / 何を監視 / recommended monitors | スタック別監視推奨 → ギャップ分析 → 実装計画 |
+| `dd-incident` | 障害調査 / investigate alert / インシデント対応 | トリアージ → タイムライン → 相関分析 → レポート |
+| `dd-audit` | 監査 / optimize monitoring / コスト削減 | インベントリ → カバレッジ分析 → ノイズ分析 → レポート |
 
-## 実行方法
+## サブスキルの呼び出し
 
-### セットアップ
+### ユーザー意図の判定
 
-**重要**: `npx` が見つからない場合は、まず PATH を自動検出してから実行すること。
-
-```bash
-# PATH 自動検出 + 実行（npx が見つからない場合はこちらを使用）
-export PATH="$(find $HOME/.nvm/versions/node -maxdepth 1 -type d 2>/dev/null | sort -V | tail -1)/bin:$HOME/.volta/bin:/opt/homebrew/bin:/usr/local/bin:$PATH" && npx datadog-connect setup
+```
+ユーザーの入力を受信
+    ↓
+├── "セットアップ" / "configure" / "初期設定" / "設定して"
+│       → dd-setup スキルを読み込む
+├── "ベストプラクティス" / "何を監視" / "推奨モニター"
+│       → dd-bestpractice スキルを読み込む
+├── "障害" / "アラート調査" / "インシデント" / "本番問題"
+│       → dd-incident スキルを読み込む
+├── "監査" / "最適化" / "ノイズ削減" / "コスト削減"
+│       → dd-audit スキルを読み込む
+└── 意図が不明
+        → 以下のメニューを表示
 ```
 
-`npx` が既に使える環境なら:
+### 意図不明時のメニュー
 
-```bash
-npx datadog-connect setup
+```markdown
+Datadog MCP Harness へようこそ。
+
+何をしますか？
+
+1. **セットアップ** — Datadog の初期設定・インテグレーション追加
+2. **ベストプラクティス** — スタックに合った監視の推奨事項を確認
+3. **インシデント対応** — 障害調査・アラートのトリアージ
+4. **監査・最適化** — 監視のカバレッジ確認・コスト削減
+
+番号または内容を教えてください。
 ```
 
-ウィザードが起動し、以下の流れで進みます:
-1. **認証**: ブラウザ自動取得 or 手動入力（3回リトライ可）
-2. **プリセット選択**: おすすめ / AWS / GCP / セキュリティ / Xserver / フル / カスタム
-3. **各モジュール設定**: 対話形式で質問に回答
-4. **自動実行**: Datadog APIで設定を適用
-5. **完了レポート**: 作成リソース一覧 + 手動手順書
+## 公式 Datadog MCP との連携
 
-詳細: [references/setup-flow.md](references/setup-flow.md)
+本ハーネスは直接 API を呼ばず、公式 Datadog MCP ツール経由で操作します。
 
-### 引数なしで呼ばれた場合
+| Datadog MCP ツール | 用途 |
+|-------------------|------|
+| `create_monitor` | モニター作成 |
+| `list_monitors` | モニター一覧取得 |
+| `get_dashboard` | ダッシュボード取得 |
+| `create_dashboard` | ダッシュボード作成 |
+| `query_metrics` | メトリクスクエリ |
+| `list_logs` | ログ検索 |
+| `get_host_and_metrics` | ホスト情報取得 |
 
-ユーザーの意図を確認:
-- 「セットアップしたい」→ `npx datadog-connect setup`
-- 「前回の続き」→ `npx datadog-connect resume`
-- 「設定を戻したい」→ `npx datadog-connect rollback`
-- 「Claude Codeから操作したい」→ `npx datadog-connect mcp`
-
-## 対応モジュール
+## 対応モジュール（dd-setup）
 
 **Cloud (6)**: AWS, GCP, Azure, On-Prem, Kubernetes, Xserver
 **Feature (5)**: APM, Logs, Dashboards, Monitors, Synthetics
-**Security (5)**: CSPM, CWS, ASM (monitor mode), SIEM, Sensitive Data Scanner
-
-詳細: [references/presets.md](references/presets.md)
-
-## ブラウザ自動取得
-
-Playwright でログインするだけで各サービスの情報を自動取得:
-- Datadog API Key / Application Key
-- AWS Account ID / GCP Project ID / Azure Subscription ID
-- Xserver VPS情報 + ファイアウォール自動設定
-
-詳細: [references/browser-guide.md](references/browser-guide.md)
-
-## トラブルシューティング
-
-[references/troubleshoot.md](references/troubleshoot.md) を参照。
+**Security (5)**: CSPM, CWS, ASM, SIEM, Sensitive Data Scanner

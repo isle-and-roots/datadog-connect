@@ -2,24 +2,20 @@ import { select, input, confirm } from "@inquirer/prompts";
 import { BaseModule } from "../base-module.js";
 import { registerModule } from "../registry.js";
 import { printManual } from "../../utils/prompts.js";
+import {
+  K8S_DISTROS,
+  K8S_INSTALL_METHODS,
+  K8S_HELM_REPO_URL,
+  K8S_HELM_CHART,
+  K8S_OPERATOR_HELM_CHART,
+  generateK8sHelmValues,
+  generateK8sOperatorCR,
+} from "../../knowledge/cloud-configs.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
-import type { DatadogClient } from "../../client/datadog-client.js";
+import type { ModulePlan, McpToolCall } from "../../orchestrator/mcp-call.js";
 import { writeSecureFile, getSecureOutputDir } from "../../utils/secure-write.js";
 
-const K8S_DISTROS = [
-  { value: "eks", name: "Amazon EKS" },
-  { value: "gke", name: "Google GKE" },
-  { value: "aks", name: "Azure AKS" },
-  { value: "vanilla", name: "Vanilla Kubernetes" },
-  { value: "openshift", name: "Red Hat OpenShift" },
-  { value: "rancher", name: "Rancher" },
-];
-
-const INSTALL_METHODS = [
-  { value: "helm", name: "Helm Chart (推奨)" },
-  { value: "operator", name: "Datadog Operator" },
-  { value: "daemonset", name: "DaemonSet Manifest" },
-];
+const INSTALL_METHODS = K8S_INSTALL_METHODS;
 
 interface K8sConfig extends ModuleConfig {
   distro: string;
@@ -70,12 +66,137 @@ class KubernetesModule extends BaseModule {
     };
   }
 
+  plan(config: ModuleConfig): ModulePlan {
+    const k8sConfig = config as K8sConfig;
+    const calls: McpToolCall[] = [];
+    const verificationCalls: McpToolCall[] = [];
+
+    const clusterName = k8sConfig.clusterName ?? "my-cluster";
+    const distro = k8sConfig.distro ?? "vanilla";
+    const installMethod = k8sConfig.installMethod ?? "helm";
+    const flags = {
+      enableApm: k8sConfig.enableApm ?? true,
+      enableLogs: k8sConfig.enableLogs ?? true,
+      enableNpm: k8sConfig.enableNpm ?? false,
+      enableLiveProcesses: k8sConfig.enableLiveProcesses ?? true,
+      enableOrchestratorExplorer: k8sConfig.enableOrchestratorExplorer ?? true,
+      enableAdmissionController: k8sConfig.enableAdmissionController ?? true,
+    };
+
+    // Kubernetes setup is mostly manual (kubectl / helm commands on the cluster)
+    // No direct Datadog API calls are needed for agent deployment.
+    // We do generate the config files and install commands as manual steps.
+
+    const manualSteps = [];
+
+    if (installMethod === "helm") {
+      const helmValues = generateK8sHelmValues(clusterName, distro, flags);
+
+      manualSteps.push({
+        title: "Kubernetes Secret を作成",
+        description: "Datadog API キーと APP キーを Kubernetes Secret として登録します。",
+        commands: [
+          `kubectl create secret generic datadog-secret \\`,
+          `  --from-literal api-key=<YOUR_DD_API_KEY> \\`,
+          `  --from-literal app-key=<YOUR_DD_APP_KEY>`,
+        ],
+      });
+
+      manualSteps.push({
+        title: `Helm Chart (${K8S_HELM_CHART}) で Datadog Agent をデプロイ`,
+        description:
+          `クラスタ: ${clusterName} (${distro}) に Helm でエージェントをデプロイします。`,
+        commands: [
+          `helm repo add datadog ${K8S_HELM_REPO_URL}`,
+          `helm repo update`,
+          `helm install datadog-agent ${K8S_HELM_CHART} \\`,
+          `  -f datadog-values.yaml \\`,
+          `  --set datadog.apiKeyExistingSecret=datadog-secret \\`,
+          `  --set datadog.appKeyExistingSecret=datadog-secret`,
+        ],
+        outputFile: "datadog-values.yaml",
+      });
+
+      manualSteps.push({
+        title: "Helm values.yaml 内容",
+        description: helmValues,
+      });
+    } else if (installMethod === "operator") {
+      const operatorCR = generateK8sOperatorCR(clusterName, flags);
+
+      manualSteps.push({
+        title: "Kubernetes Secret を作成",
+        description: "Datadog API キーと APP キーを Kubernetes Secret として登録します。",
+        commands: [
+          `kubectl create secret generic datadog-secret \\`,
+          `  --from-literal api-key=<YOUR_DD_API_KEY> \\`,
+          `  --from-literal app-key=<YOUR_DD_APP_KEY>`,
+        ],
+      });
+
+      manualSteps.push({
+        title: `Datadog Operator をインストールして DatadogAgent CR を適用`,
+        description:
+          `クラスタ: ${clusterName} に Datadog Operator を使ってエージェントをデプロイします。`,
+        commands: [
+          `helm repo add datadog ${K8S_HELM_REPO_URL}`,
+          `helm repo update`,
+          `helm install datadog-operator ${K8S_OPERATOR_HELM_CHART}`,
+          `kubectl apply -f datadog-agent-cr.yaml`,
+        ],
+        outputFile: "datadog-agent-cr.yaml",
+      });
+
+      manualSteps.push({
+        title: "DatadogAgent CR 内容",
+        description: operatorCR,
+      });
+    } else {
+      // DaemonSet (manual manifest approach)
+      manualSteps.push({
+        title: "DaemonSet マニフェストの適用",
+        description:
+          "Datadog ドキュメントから DaemonSet マニフェストをダウンロードして適用します。" +
+          "https://docs.datadoghq.com/containers/kubernetes/installation/",
+        commands: [
+          `kubectl apply -f https://raw.githubusercontent.com/DataDog/datadog-agent/main/Dockerfiles/manifests/agent.yaml`,
+        ],
+      });
+    }
+
+    // Verification: check that agent pods are running
+    verificationCalls.push({
+      id: "verify_k8s_agent_pods",
+      tool: "datadog_list_hosts",
+      parameters: {
+        filter: `kube_cluster_name:${clusterName}`,
+      },
+      description: `Datadog でクラスタ ${clusterName} のホスト (Agent Pod) が登録されているか確認`,
+    });
+
+    return {
+      moduleId: this.id,
+      moduleName: this.name,
+      category: this.category,
+      calls,
+      manualSteps,
+      verificationCalls,
+    };
+  }
+
   async execute(config: K8sConfig): Promise<ExecutionResult> {
     const manualSteps = [];
     const outputDir = getSecureOutputDir();
 
     if (config.installMethod === "helm") {
-      const values = generateHelmValues(config);
+      const values = generateK8sHelmValues(config.clusterName, config.distro, {
+        enableApm: config.enableApm,
+        enableLogs: config.enableLogs,
+        enableNpm: config.enableNpm,
+        enableLiveProcesses: config.enableLiveProcesses,
+        enableOrchestratorExplorer: config.enableOrchestratorExplorer,
+        enableAdmissionController: config.enableAdmissionController,
+      });
       const valuesPath = `${outputDir}/datadog-values.yaml`;
       writeSecureFile(valuesPath, values);
 
@@ -98,7 +219,14 @@ class KubernetesModule extends BaseModule {
 
       printManual(`Helm values: ${valuesPath}`);
     } else if (config.installMethod === "operator") {
-      const cr = generateOperatorCR(config);
+      const cr = generateK8sOperatorCR(config.clusterName, {
+        enableApm: config.enableApm,
+        enableLogs: config.enableLogs,
+        enableNpm: config.enableNpm,
+        enableLiveProcesses: config.enableLiveProcesses,
+        enableOrchestratorExplorer: config.enableOrchestratorExplorer,
+        enableAdmissionController: config.enableAdmissionController,
+      });
       const crPath = `${outputDir}/datadog-agent-cr.yaml`;
       writeSecureFile(crPath, cr);
 
@@ -119,7 +247,7 @@ class KubernetesModule extends BaseModule {
     return { success: true, resources: [], manualSteps, errors: [] };
   }
 
-  async verify(_client: DatadogClient): Promise<VerificationResult> {
+  async verify(_client: unknown): Promise<VerificationResult> {
     return {
       success: true,
       checks: [{
@@ -129,91 +257,6 @@ class KubernetesModule extends BaseModule {
       }],
     };
   }
-}
-
-function generateHelmValues(config: K8sConfig): string {
-  return `# Datadog Helm Values (generated by Datadog Connect)
-# Cluster: ${config.clusterName}
-# Distro: ${config.distro}
-
-datadog:
-  clusterName: "${config.clusterName}"
-  site: "datadoghq.com"  # wizard sets this
-
-  # APM
-  apm:
-    portEnabled: ${config.enableApm}
-    socketEnabled: ${config.enableApm}
-
-  # Logs
-  logs:
-    enabled: ${config.enableLogs}
-    containerCollectAll: ${config.enableLogs}
-
-  # Network Performance Monitoring
-  networkMonitoring:
-    enabled: ${config.enableNpm}
-
-  # Live Processes
-  processAgent:
-    enabled: ${config.enableLiveProcesses}
-    processCollection: ${config.enableLiveProcesses}
-
-  # Orchestrator Explorer
-  orchestratorExplorer:
-    enabled: ${config.enableOrchestratorExplorer}
-
-clusterAgent:
-  enabled: true
-  replicas: 2
-  ${config.enableAdmissionController ? `admissionController:
-    enabled: true
-    mutateUnlabelled: false` : ""}
-
-${config.distro === "openshift" ? `agents:
-  tolerations:
-    - operator: Exists
-  podSecurity:
-    seLinuxContext:
-      seLinuxOptions:
-        user: system_u
-        role: system_r
-        type: spc_t
-        level: s0` : ""}
-`;
-}
-
-function generateOperatorCR(config: K8sConfig): string {
-  return `# DatadogAgent Custom Resource (generated by Datadog Connect)
-apiVersion: datadoghq.com/v2alpha1
-kind: DatadogAgent
-metadata:
-  name: datadog
-spec:
-  global:
-    clusterName: "${config.clusterName}"
-    credentials:
-      apiSecret:
-        secretName: datadog-secret
-        keyName: api-key
-      appSecret:
-        secretName: datadog-secret
-        keyName: app-key
-  features:
-    apm:
-      enabled: ${config.enableApm}
-    logCollection:
-      enabled: ${config.enableLogs}
-      containerCollectAll: ${config.enableLogs}
-    npm:
-      enabled: ${config.enableNpm}
-    liveProcessCollection:
-      enabled: ${config.enableLiveProcesses}
-    orchestratorExplorer:
-      enabled: ${config.enableOrchestratorExplorer}
-    admissionController:
-      enabled: ${config.enableAdmissionController}
-`;
 }
 
 registerModule(new KubernetesModule());

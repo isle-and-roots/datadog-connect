@@ -4,24 +4,9 @@ import { registerModule } from "../registry.js";
 import { RESOURCE_PREFIX } from "../../config/constants.js";
 import { promptNotification, formatNotificationHandle } from "../shared/notifications.js";
 import { printSuccess } from "../../utils/prompts.js";
+import { TEST_LOCATIONS, SYNTHETIC_FREQUENCIES as FREQUENCIES, buildSyntheticsApiTestBody } from "../../knowledge/apm-guides.js";
 import type { ModuleConfig, ExecutionResult, VerificationResult } from "../../config/types.js";
-import type { DatadogClient } from "../../client/datadog-client.js";
-
-const TEST_LOCATIONS = [
-  { value: "aws:ap-northeast-1", name: "Tokyo (ap-northeast-1)" },
-  { value: "aws:us-east-1", name: "N. Virginia (us-east-1)" },
-  { value: "aws:eu-west-1", name: "Ireland (eu-west-1)" },
-  { value: "aws:ap-southeast-1", name: "Singapore (ap-southeast-1)" },
-  { value: "aws:us-west-2", name: "Oregon (us-west-2)" },
-];
-
-const FREQUENCIES = [
-  { value: 60, name: "1分" },
-  { value: 300, name: "5分 (推奨)" },
-  { value: 900, name: "15分" },
-  { value: 1800, name: "30分" },
-  { value: 3600, name: "1時間" },
-];
+import type { ModulePlan, McpToolCall } from "../../orchestrator/mcp-call.js";
 
 interface ApiTestDef {
   name: string;
@@ -44,6 +29,53 @@ class SyntheticsModule extends BaseModule {
   readonly description = "APIテスト・外形監視を自動作成";
   readonly category = "feature" as const;
   readonly dependencies: string[] = [];
+
+  plan(config: ModuleConfig): ModulePlan {
+    const cfg = config as SyntheticsConfig;
+    const calls: McpToolCall[] = [];
+
+    for (const test of cfg.apiTests ?? []) {
+      const body = buildSyntheticsApiTestBody(
+        {
+          name: test.name,
+          url: test.url,
+          method: test.method as "GET" | "POST" | "HEAD",
+          expectedStatus: test.expectedStatus,
+          maxResponseTime: test.maxResponseTime,
+        },
+        cfg.locations ?? [],
+        cfg.frequency ?? 300,
+        cfg.notificationHandle ?? "",
+        RESOURCE_PREFIX
+      );
+
+      calls.push({
+        tool: "datadog_create_synthetics_api_test",
+        parameters: { ...body },
+        description: `Syntheticテスト「${test.name}」を作成`,
+        rollbackCall: {
+          tool: "datadog_delete_synthetics_test",
+          parameters: { public_id: "{{created_public_id}}" },
+          description: `Syntheticテスト「${test.name}」を削除`,
+        },
+      });
+    }
+
+    return {
+      moduleId: this.id,
+      moduleName: this.name,
+      category: this.category,
+      calls,
+      manualSteps: [],
+      verificationCalls: [
+        {
+          tool: "datadog_list_synthetics_tests",
+          parameters: { tag_filters: ["managed:datadog-connect"] },
+          description: "Syntheticテスト一覧を取得して作成確認",
+        },
+      ],
+    };
+  }
 
   async prompt(): Promise<SyntheticsConfig> {
     const apiTests: ApiTestDef[] = [];
@@ -123,13 +155,13 @@ class SyntheticsModule extends BaseModule {
     return { apiTests, locations, frequency, notificationHandle };
   }
 
-  async execute(config: SyntheticsConfig, client: DatadogClient): Promise<ExecutionResult> {
+  async execute(config: SyntheticsConfig, client: unknown): Promise<ExecutionResult> {
     const resources = [];
     const errors = [];
 
     for (const test of config.apiTests) {
       try {
-        const resp = await client.v1.synthetics.createSyntheticsAPITest({
+        const resp = await (client as any).v1.synthetics.createSyntheticsAPITest({
           body: {
             name: `${RESOURCE_PREFIX} ${test.name}`,
             type: "api",
@@ -181,11 +213,11 @@ class SyntheticsModule extends BaseModule {
     return { success: errors.length === 0, resources, manualSteps: [], errors };
   }
 
-  async verify(client: DatadogClient): Promise<VerificationResult> {
+  async verify(client: unknown): Promise<VerificationResult> {
     const checks = [];
     try {
-      const resp = await client.v1.synthetics.listTests();
-      const managed = (resp.tests ?? []).filter((t) =>
+      const resp = await (client as any).v1.synthetics.listTests();
+      const managed = (resp.tests ?? []).filter((t: any) =>
         t.tags?.includes("managed:datadog-connect")
       );
       checks.push({
